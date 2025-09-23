@@ -1,103 +1,158 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useMemo, useState } from "react";
+import { DOMAINS } from "@/data/instrument";
+
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+
+import { QuestionItem } from "./components/QuestionItem";
+
+type State = {
+  value: 0 | 1 | 2 | null;
+  notApplicable: boolean;
+  evidence: string;
+  observations: string;
+};
+
+export default function HomePage() {
+  const [page, setPage] = useState(1); // 1..N dominios
+
+  // Estado por itemCode
+  const allItems = DOMAINS.flatMap((d) =>
+    d.subsections.flatMap((s) => s.items.map((i) => ({ ...i })))
+  );
+
+  const [answers, setAnswers] = useState<Record<string, State>>(
+    Object.fromEntries(
+      allItems.map((i) => [
+        i.code,
+        { value: null, notApplicable: false, evidence: "", observations: "" },
+      ])
+    )
+  );
+
+  const pageCount = DOMAINS.length;
+  const currentDomain = DOMAINS[page - 1];
+
+  const domainItems = useMemo(
+    () => currentDomain.subsections.flatMap((s) => s.items),
+    [currentDomain]
+  );
+
+  const totalAnswered = Object.values(answers).filter(
+    (a) => a.notApplicable || a.value !== null
+  ).length;
+  const progressValue = Math.round((totalAnswered / allItems.length) * 100);
+
+  const pageComplete = domainItems.every(
+    (i) => answers[i.code].notApplicable || answers[i.code].value !== null
+  );
+
+  const update = (code: string, patch: Partial<State>) =>
+    setAnswers((prev) => ({ ...prev, [code]: { ...prev[code], ...patch } }));
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    // Validación global
+    const incomplete = allItems.some(
+      (i) => !(answers[i.code].notApplicable || answers[i.code].value !== null)
+    );
+    if (incomplete) {
+      alert("Faltan respuestas");
+      return;
+    }
+
+    const payload = {
+      evaluation: {
+        instrumentKey: "centro-sim-qa",
+        context: { submittedAt: new Date().toISOString() },
+      },
+      answers: allItems.map((i) => ({
+        itemCode: i.code,
+        domainCode: i.domainCode,
+        score: answers[i.code].notApplicable ? null : answers[i.code].value,
+        notApplicable: answers[i.code].notApplicable,
+        evidence: answers[i.code].evidence || undefined,
+        observations: answers[i.code].observations || undefined,
+      })),
+    };
+
+    try {
+      const res = await fetch("/api/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(await res.text());
+    } catch (err) {
+      alert("Error al enviar las respuestas");
+    }
+  }
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <main className="min-h-screen bg-gray-50">
+      <div className="mx-auto max-w-3xl p-6 space-y-6">
+        <header className="space-y-3">
+          <h1 className="text-2xl font-bold">Encuesta</h1>
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-gray-600">
+              Dominio {page} de {pageCount} • {totalAnswered}/{allItems.length}{" "}
+              respondidas
+            </p>
+            <div className="w-40">
+              <Progress value={progressValue} />
+            </div>
+          </div>
+          <h2 className="text-lg font-semibold">
+            {currentDomain.code}. {currentDomain.title}
+          </h2>
+        </header>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+        <form onSubmit={submit} className="space-y-6">
+          {domainItems.map((it, i) => {
+            const st = answers[it.code];
+            return (
+              <QuestionItem
+                key={it.code}
+                index={i}
+                itemCode={it.code}
+                question={it.title}
+                value={st.value}
+                notApplicable={st.notApplicable}
+                evidence={st.evidence}
+                observations={st.observations}
+                onChange={(patch) => update(it.code, patch)}
+              />
+            );
+          })}
+
+          <div className="flex items-center justify-between pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+            >
+              Anterior
+            </Button>
+
+            {page < pageCount ? (
+              <Button
+                type="button"
+                onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+                disabled={!pageComplete}
+              >
+                Siguiente
+              </Button>
+            ) : (
+              <Button type="submit" disabled={!pageComplete}>
+                Enviar
+              </Button>
+            )}
+          </div>
+        </form>
+      </div>
+    </main>
   );
 }
