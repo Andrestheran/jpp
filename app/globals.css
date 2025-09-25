@@ -1,5 +1,5 @@
-@tailwind base;
-@tailwind components;
+@import "tailwindcss/preflight";
+@tailwind utilities;
 @tailwind utilities;
 
 :root {
@@ -51,6 +51,7 @@
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
   }
