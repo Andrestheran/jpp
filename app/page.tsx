@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { DOMAINS } from "@/data/instrument";
+import { useMemo, useState, useEffect } from "react";
+import { loadDomains, type UIDomain } from "@/data/instrument";
 
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -19,36 +19,100 @@ type State = {
 
 export default function HomePage() {
   const [page, setPage] = useState(1); // 1..N dominios
+  const [domains, setDomains] = useState<UIDomain[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Estado por itemCode
-  const allItems = DOMAINS.flatMap((d) =>
-    d.subsections.flatMap((s) => s.items.map((i) => ({ ...i })))
-  );
+  const [answers, setAnswers] = useState<Record<string, State>>({});
+  const [initialized, setInitialized] = useState(false);
 
-  const [answers, setAnswers] = useState<Record<string, State>>(
-    Object.fromEntries(
-      allItems.map((i) => [
-        i.code,
-        { value: null, notApplicable: false, evidence: "", observations: "" },
-      ])
-    )
-  );
+  // Cargar dominios desde la base de datos
+  useEffect(() => {
+    let isMounted = true;
 
-  const pageCount = DOMAINS.length;
-  const currentDomain = DOMAINS[page - 1];
+    // Timeout de seguridad para evitar carga infinita
+    const timeoutId = setTimeout(() => {
+      if (isMounted && loading) {
+        console.warn("⚠️ Loading timeout reached");
+        setLoading(false);
+        setInitialized(true);
+      }
+    }, 10000); // 10 segundos timeout
+
+    const loadData = async () => {
+      try {
+        const domainsData = await loadDomains();
+        if (isMounted) {
+          setDomains(domainsData);
+
+          // Inicializar respuestas
+          const allItems = domainsData.flatMap((d) =>
+            d.subsections.flatMap((s) => s.items.map((i) => ({ ...i })))
+          );
+
+          if (allItems.length > 0) {
+            const initialAnswers = Object.fromEntries(
+              allItems.map((i) => [
+                i.code,
+                {
+                  value: null,
+                  notApplicable: false,
+                  evidence: "",
+                  observations: "",
+                },
+              ])
+            );
+            setAnswers(initialAnswers);
+          }
+
+          setInitialized(true);
+          clearTimeout(timeoutId);
+        }
+      } catch (error) {
+        console.error("Error loading domains:", error);
+        if (isMounted) {
+          setInitialized(true);
+          clearTimeout(timeoutId);
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadData();
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+    };
+  }, []);
+
+  // Estado por itemCode - usar useMemo para evitar recálculos innecesarios
+  const allItems = useMemo(() => {
+    return domains.flatMap((d) =>
+      d.subsections.flatMap((s) => s.items.map((i) => ({ ...i })))
+    );
+  }, [domains]);
+
+  const pageCount = domains.length;
+  const currentDomain = domains[page - 1];
 
   const domainItems = useMemo(
-    () => currentDomain.subsections.flatMap((s) => s.items),
+    () => currentDomain?.subsections.flatMap((s) => s.items) || [],
     [currentDomain]
   );
 
   const totalAnswered = Object.values(answers).filter(
     (a) => a.notApplicable || a.value !== null
   ).length;
-  const progressValue = Math.round((totalAnswered / allItems.length) * 100);
+  const progressValue =
+    allItems.length > 0
+      ? Math.round((totalAnswered / allItems.length) * 100)
+      : 0;
 
   const pageComplete = domainItems.every(
-    (i) => answers[i.code].notApplicable || answers[i.code].value !== null
+    (i) => answers[i.code]?.notApplicable || answers[i.code]?.value !== null
   );
 
   const update = (code: string, patch: Partial<State>) =>
@@ -110,6 +174,37 @@ export default function HomePage() {
     }
   }
 
+  if (loading || !initialized) {
+    return (
+      <ProtectedRoute>
+        <UserHeader />
+        <main className="min-h-screen bg-gray-50">
+          <div className="mx-auto max-w-3xl p-6 space-y-6">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+              <p className="mt-4 text-gray-600">Cargando preguntas...</p>
+            </div>
+          </div>
+        </main>
+      </ProtectedRoute>
+    );
+  }
+
+  if (domains.length === 0) {
+    return (
+      <ProtectedRoute>
+        <UserHeader />
+        <main className="min-h-screen bg-gray-50">
+          <div className="mx-auto max-w-3xl p-6 space-y-6">
+            <div className="text-center">
+              <p className="text-gray-600">No hay preguntas disponibles.</p>
+            </div>
+          </div>
+        </main>
+      </ProtectedRoute>
+    );
+  }
+
   return (
     <ProtectedRoute>
       <UserHeader />
@@ -127,13 +222,15 @@ export default function HomePage() {
               </div>
             </div>
             <h2 className="text-lg font-semibold">
-              {currentDomain.code}. {currentDomain.title}
+              {currentDomain?.code}. {currentDomain?.title}
             </h2>
           </header>
 
           <form onSubmit={submit} className="space-y-6">
             {domainItems.map((it, i) => {
               const st = answers[it.code];
+              if (!st) return null; // Evitar error si aún no se han cargado las respuestas
+
               return (
                 <QuestionItem
                   key={it.code}

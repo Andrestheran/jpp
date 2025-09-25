@@ -1,36 +1,103 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Sistema de Evaluación de Centros de Simulación
 
-## Getting Started
+Sistema web para evaluar la calidad de centros de simulación médica con autenticación de usuarios y roles diferenciados.
 
-First, run the development server:
+## 🚀 Características
+
+- **Autenticación completa** con roles Admin/Usuario
+- **Gestión dinámica de preguntas** por administradores
+- **Formulario de evaluación** con evidencias y observaciones
+- **Base de datos** con Supabase
+- **Interfaz moderna** con React y Tailwind CSS
+
+## 🛠️ Tecnologías
+
+- **Frontend**: Next.js 15, React 19, TypeScript
+- **Styling**: Tailwind CSS, Radix UI
+- **Backend**: Supabase (PostgreSQL)
+- **Autenticación**: Supabase Auth
+- **Deployment**: Vercel
+
+## 📦 Instalación Local
+
+1. **Clonar repositorio**
+
+```bash
+git clone [URL_DEL_REPO]
+cd jpp
+```
+
+2. **Instalar dependencias**
+
+```bash
+npm install
+```
+
+3. **Configurar variables de entorno**
+
+```bash
+cp .env.example .env.local
+# Editar .env.local con tus credenciales de Supabase
+```
+
+4. **Ejecutar en desarrollo**
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 🔧 Configuración de Supabase
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. **Crear proyecto** en [Supabase](https://supabase.com)
+2. **Ejecutar SQL** del archivo `sql/auth_tables.sql`
+3. **Configurar variables** en `.env.local`
+4. **Crear usuario admin** siguiendo `SETUP_AUTH.md`
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 🎯 Uso del Sistema
 
-## Learn More
+### Administradores
 
-To learn more about Next.js, take a look at the following resources:
+- Gestionar usuarios y roles
+- Agregar/eliminar preguntas
+- Editar evidencias y observaciones
+- Acceso completo al sistema
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Usuarios
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Completar evaluaciones
+- Ver evidencias (solo lectura)
+- Responder preguntas
+- Sin acceso a observaciones
 
-## Deploy on Vercel
+## 📚 Estructura del Proyecto
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```
+/app/
+  /admin/          # Páginas de administración
+  /api/            # API routes
+  /components/     # Componentes de la app
+/components/       # Componentes UI reutilizables
+/contexts/         # Context providers
+/lib/              # Utilidades y configuración
+/sql/              # Scripts de base de datos
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 🚀 Deployment
+
+### Vercel (Recomendado)
+
+1. Conectar repositorio con Vercel
+2. Configurar variables de entorno
+3. Deploy automático
+
+### Variables de Entorno para Producción
+
+```
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+```
+
+## 📄 Licencia
+
+Este proyecto está bajo la Licencia MIT.

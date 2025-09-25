@@ -29,12 +29,24 @@ export function UserHeader() {
           </div>
 
           <div className="flex items-center space-x-4">
+            <Link href="/">
+              <Button variant="outline" size="sm">
+                Inicio
+              </Button>
+            </Link>
             {isAdmin && (
-              <Link href="/admin">
-                <Button variant="outline" size="sm">
-                  Administrar Usuarios
-                </Button>
-              </Link>
+              <>
+                <Link href="/admin">
+                  <Button variant="outline" size="sm">
+                    Usuarios
+                  </Button>
+                </Link>
+                <Link href="/admin/preguntas">
+                  <Button variant="outline" size="sm">
+                    Preguntas
+                  </Button>
+                </Link>
+              </>
             )}
             <span className="text-sm text-gray-700">
               {user.profile?.full_name || user.email}
