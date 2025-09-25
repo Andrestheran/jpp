@@ -4,6 +4,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/contexts/AuthContext";
 
 type Score = 0 | 1 | 2 | null;
 
@@ -32,6 +33,7 @@ export function QuestionItem({
   observations,
   onChange,
 }: Props) {
+  const { isAdmin } = useAuth();
   return (
     <div className="rounded-2xl bg-white p-4 shadow-sm space-y-3">
       <div className="flex items-start justify-between gap-4">
@@ -67,23 +69,41 @@ export function QuestionItem({
         ))}
       </RadioGroup>
 
+      {/* Evidencia - visible para todos, editable solo para admin */}
       <div className="grid gap-2">
-        <Label htmlFor={`ev-${index}`}>Evidencia (opcional)</Label>
+        <Label htmlFor={`ev-${index}`}>
+          Evidencia (opcional)
+          {isAdmin && (
+            <span className="text-xs text-gray-500 ml-1">(editable)</span>
+          )}
+        </Label>
         <Textarea
           id={`ev-${index}`}
           value={evidence}
           onChange={(e) => onChange({ evidence: e.target.value })}
+          readOnly={!isAdmin}
+          className={!isAdmin ? "bg-gray-50 cursor-not-allowed" : ""}
+          placeholder={
+            isAdmin ? "Agregar evidencia..." : "Solo visible para usuarios"
+          }
         />
       </div>
 
-      <div className="grid gap-2">
-        <Label htmlFor={`ob-${index}`}>Observaciones (opcional)</Label>
-        <Textarea
-          id={`ob-${index}`}
-          value={observations}
-          onChange={(e) => onChange({ observations: e.target.value })}
-        />
-      </div>
+      {/* Observaciones - solo visible y editable para admin */}
+      {isAdmin && (
+        <div className="grid gap-2">
+          <Label htmlFor={`ob-${index}`}>
+            Observaciones (solo admin)
+            <span className="text-xs text-purple-600 ml-1">(privado)</span>
+          </Label>
+          <Textarea
+            id={`ob-${index}`}
+            value={observations}
+            onChange={(e) => onChange({ observations: e.target.value })}
+            placeholder="Observaciones internas..."
+          />
+        </div>
+      )}
     </div>
   );
 }

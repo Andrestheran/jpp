@@ -5,6 +5,8 @@ import { DOMAINS } from "@/data/instrument";
 
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { UserHeader } from "@/components/auth/UserHeader";
 
 import { QuestionItem } from "./components/QuestionItem";
 
@@ -54,10 +56,15 @@ export default function HomePage() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    console.log("🚀 Submit function called");
+
     // Validación global
     const incomplete = allItems.some(
       (i) => !(answers[i.code].notApplicable || answers[i.code].value !== null)
     );
+    console.log("❓ Incomplete answers:", incomplete);
+    console.log("📊 All answers:", answers);
+
     if (incomplete) {
       alert("Faltan respuestas");
       return;
@@ -78,81 +85,97 @@ export default function HomePage() {
       })),
     };
 
+    console.log("📦 Payload to send:", payload);
+
     try {
+      console.log("🌐 Sending request to /api/submit");
       const res = await fetch("/api/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error(await res.text());
+
+      console.log("📡 Response status:", res.status);
+      const responseText = await res.text();
+      console.log("📄 Response text:", responseText);
+
+      if (!res.ok) {
+        throw new Error(responseText);
+      }
+
+      alert("✅ ¡Respuestas enviadas correctamente!");
     } catch (err) {
-      alert("Error al enviar las respuestas");
+      console.error("❌ Error in submit:", err);
+      alert(`Error al enviar las respuestas: ${err}`);
     }
   }
 
   return (
-    <main className="min-h-screen bg-gray-50">
-      <div className="mx-auto max-w-3xl p-6 space-y-6">
-        <header className="space-y-3">
-          <h1 className="text-2xl font-bold">Encuesta</h1>
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-600">
-              Dominio {page} de {pageCount} • {totalAnswered}/{allItems.length}{" "}
-              respondidas
-            </p>
-            <div className="w-40">
-              <Progress value={progressValue} />
+    <ProtectedRoute>
+      <UserHeader />
+      <main className="min-h-screen bg-gray-50">
+        <div className="mx-auto max-w-3xl p-6 space-y-6">
+          <header className="space-y-3">
+            <h1 className="text-2xl font-bold">Encuesta</h1>
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-gray-600">
+                Dominio {page} de {pageCount} • {totalAnswered}/
+                {allItems.length} respondidas
+              </p>
+              <div className="w-40">
+                <Progress value={progressValue} />
+              </div>
             </div>
-          </div>
-          <h2 className="text-lg font-semibold">
-            {currentDomain.code}. {currentDomain.title}
-          </h2>
-        </header>
+            <h2 className="text-lg font-semibold">
+              {currentDomain.code}. {currentDomain.title}
+            </h2>
+          </header>
 
-        <form onSubmit={submit} className="space-y-6">
-          {domainItems.map((it, i) => {
-            const st = answers[it.code];
-            return (
-              <QuestionItem
-                key={it.code}
-                index={i}
-                itemCode={it.code}
-                question={it.title}
-                value={st.value}
-                notApplicable={st.notApplicable}
-                evidence={st.evidence}
-                observations={st.observations}
-                onChange={(patch) => update(it.code, patch)}
-              />
-            );
-          })}
+          <form onSubmit={submit} className="space-y-6">
+            {domainItems.map((it, i) => {
+              const st = answers[it.code];
+              return (
+                <QuestionItem
+                  key={it.code}
+                  index={i}
+                  itemCode={it.code}
+                  question={it.title}
+                  value={st.value}
+                  notApplicable={st.notApplicable}
+                  evidence={st.evidence}
+                  observations={st.observations}
+                  onChange={(patch) => update(it.code, patch)}
+                />
+              );
+            })}
 
-          <div className="flex items-center justify-between pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-            >
-              Anterior
-            </Button>
-
-            {page < pageCount ? (
+            <div className="flex items-center justify-between pt-2">
               <Button
                 type="button"
-                onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
-                disabled={!pageComplete}
+                variant="outline"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
               >
-                Siguiente
+                Anterior
               </Button>
-            ) : (
-              <Button type="submit" disabled={!pageComplete}>
-                Enviar
-              </Button>
-            )}
-          </div>
-        </form>
-      </div>
-    </main>
+
+              {page < pageCount ? (
+                <Button
+                  type="button"
+                  onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+                  disabled={!pageComplete}
+                >
+                  Siguiente
+                </Button>
+              ) : (
+                <Button type="submit" disabled={!pageComplete}>
+                  Enviar
+                </Button>
+              )}
+            </div>
+          </form>
+        </div>
+      </main>
+    </ProtectedRoute>
   );
 }
