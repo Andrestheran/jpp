@@ -6,6 +6,8 @@ import { UserHeader } from "@/components/auth/UserHeader";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/auth";
+import Link from "next/link";
+import { FileText, Users } from "lucide-react";
 
 interface UserProfile {
   id: string;
@@ -105,10 +107,49 @@ export default function AdminPage() {
       <main className="min-h-screen bg-gray-50">
         <div className="mx-auto max-w-6xl p-6 space-y-6">
           <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold">Administración de Usuarios</h1>
-            <Button onClick={() => setShowCreateForm(!showCreateForm)}>
-              {showCreateForm ? "Cancelar" : "Crear Usuario"}
-            </Button>
+            <h1 className="text-2xl font-bold">Panel de Administración</h1>
+            <div className="flex space-x-4">
+              <Link href="/admin/files">
+                <Button variant="outline" className="flex items-center space-x-2">
+                  <FileText className="h-4 w-4" />
+                  <span>Gestionar Archivos</span>
+                </Button>
+              </Link>
+              <Button onClick={() => setShowCreateForm(!showCreateForm)}>
+                {showCreateForm ? "Cancelar" : "Crear Usuario"}
+              </Button>
+            </div>
+          </div>
+
+          {/* Admin Navigation Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <Link href="/admin">
+              <div className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow cursor-pointer">
+                <div className="flex items-center space-x-4">
+                  <div className="p-3 bg-blue-100 rounded-lg">
+                    <Users className="h-6 w-6 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">Usuarios</h3>
+                    <p className="text-gray-600">Gestionar usuarios del sistema</p>
+                  </div>
+                </div>
+              </div>
+            </Link>
+            
+            <Link href="/admin/files">
+              <div className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow cursor-pointer">
+                <div className="flex items-center space-x-4">
+                  <div className="p-3 bg-green-100 rounded-lg">
+                    <FileText className="h-6 w-6 text-green-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">Archivos Multimedia</h3>
+                    <p className="text-gray-600">Subir y gestionar archivos</p>
+                  </div>
+                </div>
+              </div>
+            </Link>
           </div>
 
           {showCreateForm && (

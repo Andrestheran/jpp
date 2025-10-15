@@ -6,8 +6,11 @@ import { UserHeader } from "@/components/auth/UserHeader";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { FileUpload } from "@/components/ui/file-upload";
 import { supabase } from "@/lib/auth";
 import { invalidateDomainsCache } from "@/data/instrument";
+import { Trash2, AlertTriangle, Upload } from "lucide-react";
 
 interface Domain {
   id: string;
@@ -27,9 +30,10 @@ interface Item {
   code: string;
   title: string;
   requires_evidence: boolean;
-  subsection_id: string;
-  subsection?: Subsection;
-  domain?: Domain;
+  subsection_id?: string | null;
+  evidence_files?: string[]; // URLs de archivos de evidencia
+  subsection?: Subsection | null;
+  domain?: Domain | null;
 }
 
 export default function AdminQuestionsPage() {
@@ -38,6 +42,9 @@ export default function AdminQuestionsPage() {
   const [subsections, setSubsections] = useState<Subsection[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
 
   const [newItem, setNewItem] = useState({
     code: "",
@@ -45,6 +52,9 @@ export default function AdminQuestionsPage() {
     subsection_id: "",
     requires_evidence: false,
   });
+
+  const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
+  const [isUploadingEvidence, setIsUploadingEvidence] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -76,12 +86,12 @@ export default function AdminQuestionsPage() {
         .select(
           `
           *,
-          subsections!inner(
+          subsections(
             id,
             code,
             title,
             domain_id,
-            domains!inner(
+            domains(
               id,
               code,
               title
@@ -97,8 +107,8 @@ export default function AdminQuestionsPage() {
       const transformedItems =
         itemsData?.map((item) => ({
           ...item,
-          subsection: item.subsections,
-          domain: item.subsections.domains,
+          subsection: item.subsections || null,
+          domain: item.subsections?.domains || null,
         })) || [];
 
       setItems(transformedItems);
@@ -113,11 +123,19 @@ export default function AdminQuestionsPage() {
   const createItem = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      let evidenceFileUrls: string[] = [];
+
+      // Upload evidence files if required
+      if (newItem.requires_evidence && evidenceFiles.length > 0) {
+        evidenceFileUrls = await uploadEvidenceFiles(evidenceFiles);
+      }
+
       const { error } = await supabase.from("items").insert({
         code: newItem.code,
         title: newItem.title,
-        subsection_id: newItem.subsection_id,
+        subsection_id: newItem.subsection_id || null,
         requires_evidence: newItem.requires_evidence,
+        evidence_files: evidenceFileUrls.length > 0 ? evidenceFileUrls : null,
       });
 
       if (error) throw error;
@@ -129,6 +147,7 @@ export default function AdminQuestionsPage() {
         subsection_id: "",
         requires_evidence: false,
       });
+      setEvidenceFiles([]);
       setShowCreateForm(false);
       invalidateDomainsCache(); // Limpiar cache para que se recarguen las preguntas
       loadData();
@@ -145,6 +164,17 @@ export default function AdminQuestionsPage() {
     }
 
     try {
+      // First, delete related answers to avoid foreign key constraints
+      const { error: answersError } = await supabase
+        .from("answers")
+        .delete()
+        .eq("item_id", itemId);
+
+      if (answersError) {
+        console.warn("Warning: Could not delete related answers:", answersError);
+        // Continue with item deletion even if answers deletion fails
+      }
+
       const { error } = await supabase.from("items").delete().eq("id", itemId);
 
       if (error) throw error;
@@ -159,6 +189,183 @@ export default function AdminQuestionsPage() {
     }
   };
 
+  const deleteSelectedItems = async () => {
+    if (selectedItems.size === 0) return;
+
+    try {
+      const itemIds = Array.from(selectedItems);
+
+      // First, delete related answers to avoid foreign key constraints
+      const { error: answersError } = await supabase
+        .from("answers")
+        .delete()
+        .in("item_id", itemIds);
+
+      if (answersError) {
+        console.warn("Warning: Could not delete related answers:", answersError);
+        // Continue with item deletion even if answers deletion fails
+      }
+
+      const { error } = await supabase
+        .from("items")
+        .delete()
+        .in("id", itemIds);
+
+      if (error) throw error;
+
+      alert(`${selectedItems.size} pregunta(s) eliminada(s) exitosamente`);
+      setSelectedItems(new Set());
+      setShowBulkDeleteConfirm(false);
+      invalidateDomainsCache();
+      loadData();
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Error desconocido";
+      alert(`Error eliminando preguntas: ${errorMessage}`);
+    }
+  };
+
+  const deleteAllItems = async () => {
+    try {
+      // First get all item IDs to delete them
+      const { data: allItems, error: fetchError } = await supabase
+        .from("items")
+        .select("id");
+
+      if (fetchError) throw fetchError;
+
+      if (!allItems || allItems.length === 0) {
+        alert("No hay preguntas para eliminar");
+        setShowDeleteAllConfirm(false);
+        return;
+      }
+
+      const itemIds = allItems.map(item => item.id);
+
+      // First, delete all related answers to avoid foreign key constraints
+      const { error: answersError } = await supabase
+        .from("answers")
+        .delete()
+        .in("item_id", itemIds);
+
+      if (answersError) {
+        console.warn("Warning: Could not delete related answers:", answersError);
+        // Continue with item deletion even if answers deletion fails
+      }
+
+      // Delete all items by their IDs
+      const { error } = await supabase
+        .from("items")
+        .delete()
+        .in("id", itemIds);
+
+      if (error) throw error;
+
+      alert("Todas las preguntas han sido eliminadas exitosamente");
+      setSelectedItems(new Set());
+      setShowDeleteAllConfirm(false);
+      invalidateDomainsCache();
+      loadData();
+    } catch (error) {
+      console.error("Error deleting all items:", error);
+      
+      // Handle specific Supabase errors
+      let errorMessage = "Error desconocido";
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'object' && error !== null && 'message' in error) {
+        errorMessage = String(error.message);
+      }
+      
+      // Check for common database errors
+      if (errorMessage.includes('foreign key')) {
+        errorMessage = "No se pueden eliminar las preguntas porque están siendo utilizadas por otros registros. Elimine primero las respuestas relacionadas.";
+      } else if (errorMessage.includes('permission')) {
+        errorMessage = "No tienes permisos para eliminar todas las preguntas.";
+      } else if (errorMessage.includes('constraint')) {
+        errorMessage = "No se pueden eliminar las preguntas debido a restricciones de la base de datos.";
+      }
+      
+      alert(`Error eliminando todas las preguntas: ${errorMessage}`);
+    }
+  };
+
+  const toggleItemSelection = (itemId: string) => {
+    const newSelected = new Set(selectedItems);
+    if (newSelected.has(itemId)) {
+      newSelected.delete(itemId);
+    } else {
+      newSelected.add(itemId);
+    }
+    setSelectedItems(newSelected);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedItems.size === items.length) {
+      setSelectedItems(new Set());
+    } else {
+      setSelectedItems(new Set(items.map(item => item.id)));
+    }
+  };
+
+  const uploadEvidenceFiles = async (files: File[]): Promise<string[]> => {
+    if (files.length === 0) return [];
+
+    setIsUploadingEvidence(true);
+    try {
+      // First, check if the bucket exists
+      const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
+      
+      if (bucketsError) {
+        throw new Error(`Error checking buckets: ${bucketsError.message}`);
+      }
+
+      const multimediaBucket = buckets?.find(bucket => bucket.id === 'multimedia');
+      if (!multimediaBucket) {
+        throw new Error('El bucket "multimedia" no existe. Por favor, crea el bucket en Supabase Storage siguiendo las instrucciones en SETUP_STORAGE.md');
+      }
+
+      const uploadPromises = files.map(async (file) => {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
+        const filePath = `evidence/${fileName}`;
+
+        // Upload file to Supabase Storage
+        const { data, error } = await supabase.storage
+          .from('multimedia')
+          .upload(filePath, file);
+
+        if (error) {
+          // Handle specific storage errors
+          if (error.message.includes('Bucket not found')) {
+            throw new Error('El bucket "multimedia" no existe. Crea el bucket en Supabase Storage.');
+          } else if (error.message.includes('Permission denied')) {
+            throw new Error('No tienes permisos para subir archivos. Verifica que eres administrador.');
+          } else if (error.message.includes('File too large')) {
+            throw new Error('El archivo es demasiado grande. Límite: 50MB por archivo.');
+          } else {
+            throw new Error(`Error subiendo archivo: ${error.message}`);
+          }
+        }
+
+        // Get public URL
+        const { data: { publicUrl } } = supabase.storage
+          .from('multimedia')
+          .getPublicUrl(filePath);
+
+        return publicUrl;
+      });
+
+      const uploadedUrls = await Promise.all(uploadPromises);
+      return uploadedUrls;
+    } catch (error) {
+      console.error('Error uploading evidence files:', error);
+      throw error;
+    } finally {
+      setIsUploadingEvidence(false);
+    }
+  };
+
   const getSubsectionsByDomain = (domainId: string) => {
     return subsections.filter((s) => s.domain_id === domainId);
   };
@@ -170,9 +377,31 @@ export default function AdminQuestionsPage() {
         <div className="mx-auto max-w-7xl p-6 space-y-6">
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-bold">Administración de Preguntas</h1>
-            <Button onClick={() => setShowCreateForm(!showCreateForm)}>
-              {showCreateForm ? "Cancelar" : "Agregar Pregunta"}
-            </Button>
+            <div className="flex space-x-2">
+              {selectedItems.size > 0 && (
+                <Button
+                  variant="destructive"
+                  onClick={() => setShowBulkDeleteConfirm(true)}
+                  className="flex items-center space-x-2"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  <span>Eliminar Seleccionadas ({selectedItems.size})</span>
+                </Button>
+              )}
+              {items.length > 0 && (
+                <Button
+                  variant="destructive"
+                  onClick={() => setShowDeleteAllConfirm(true)}
+                  className="flex items-center space-x-2"
+                >
+                  <AlertTriangle className="h-4 w-4" />
+                  <span>Eliminar Todas</span>
+                </Button>
+              )}
+              <Button onClick={() => setShowCreateForm(!showCreateForm)}>
+                {showCreateForm ? "Cancelar" : "Agregar Pregunta"}
+              </Button>
+            </div>
           </div>
 
           {showCreateForm && (
@@ -198,10 +427,9 @@ export default function AdminQuestionsPage() {
                   </div>
 
                   <div>
-                    <Label htmlFor="subsection">Subsección</Label>
+                    <Label htmlFor="subsection">Subsección (Opcional)</Label>
                     <select
                       id="subsection"
-                      required
                       className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       value={newItem.subsection_id}
                       onChange={(e) =>
@@ -211,7 +439,7 @@ export default function AdminQuestionsPage() {
                         })
                       }
                     >
-                      <option value="">Seleccionar subsección...</option>
+                      <option value="">Sin subsección específica</option>
                       {domains.map((domain) => (
                         <optgroup
                           key={domain.id}
@@ -260,8 +488,40 @@ export default function AdminQuestionsPage() {
                   <Label htmlFor="requires_evidence">Requiere evidencia</Label>
                 </div>
 
-                <Button type="submit" className="w-full">
-                  Crear Pregunta
+                {/* Drag and Drop para archivos de evidencia */}
+                {newItem.requires_evidence && (
+                  <div className="space-y-4">
+                    <div className="flex items-center space-x-2">
+                      <Upload className="h-5 w-5 text-blue-600" />
+                      <Label className="text-sm font-medium text-gray-700">
+                        Archivos de Evidencia
+                      </Label>
+                    </div>
+                    <FileUpload
+                      onFilesUploaded={setEvidenceFiles}
+                      maxFiles={5}
+                      maxFileSize={50} // 50MB
+                      acceptedTypes={[
+                        "video/mp4",
+                        "application/pdf", 
+                        "image/jpeg",
+                        "image/jpg",
+                        "image/png"
+                      ]}
+                      className="border-2 border-dashed border-blue-300 rounded-lg"
+                    />
+                    <p className="text-xs text-gray-500">
+                      Sube archivos multimedia que sirvan como evidencia para esta pregunta (máximo 5 archivos, 50MB cada uno)
+                    </p>
+                  </div>
+                )}
+
+                <Button 
+                  type="submit" 
+                  className="w-full"
+                  disabled={isUploadingEvidence}
+                >
+                  {isUploadingEvidence ? "Subiendo archivos..." : "Crear Pregunta"}
                 </Button>
               </form>
             </div>
@@ -281,6 +541,12 @@ export default function AdminQuestionsPage() {
                 <table className="w-full">
                   <thead className="bg-gray-50">
                     <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
+                        <Checkbox
+                          checked={selectedItems.size === items.length && items.length > 0}
+                          onCheckedChange={toggleSelectAll}
+                        />
+                      </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Código
                       </th>
@@ -303,15 +569,21 @@ export default function AdminQuestionsPage() {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {items.map((item) => (
-                      <tr key={item.id}>
+                      <tr key={item.id} className={selectedItems.has(item.id) ? "bg-blue-50" : ""}>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <Checkbox
+                            checked={selectedItems.has(item.id)}
+                            onCheckedChange={() => toggleItemSelection(item.id)}
+                          />
+                        </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                           {item.code}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {item.domain?.code}. {item.domain?.title}
+                          {item.domain ? `${item.domain.code}. ${item.domain.title}` : 'Sin dominio'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {item.subsection?.code}. {item.subsection?.title}
+                          {item.subsection ? `${item.subsection.code}. ${item.subsection.title}` : 'Sin subsección'}
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-900 max-w-md">
                           <div className="truncate" title={item.title}>
@@ -320,7 +592,14 @@ export default function AdminQuestionsPage() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {item.requires_evidence ? (
-                            <span className="text-green-600">Sí</span>
+                            <div className="flex items-center space-x-2">
+                              <span className="text-green-600">Sí</span>
+                              {item.evidence_files && item.evidence_files.length > 0 && (
+                                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                                  {item.evidence_files.length} archivo(s)
+                                </span>
+                              )}
+                            </div>
                           ) : (
                             <span className="text-gray-400">No</span>
                           )}
@@ -342,6 +621,86 @@ export default function AdminQuestionsPage() {
               </div>
             )}
           </div>
+
+          {/* Confirmation Dialogs */}
+          {showBulkDeleteConfirm && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+                <div className="flex items-center space-x-3 mb-4">
+                  <div className="flex-shrink-0">
+                    <AlertTriangle className="h-6 w-6 text-red-600" />
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-900">
+                    Confirmar Eliminación
+                  </h3>
+                </div>
+                <p className="text-sm text-gray-500 mb-6">
+                  ¿Estás seguro de que quieres eliminar {selectedItems.size} pregunta(s) seleccionada(s)? 
+                  <br /><br />
+                  <strong>Esto también eliminará:</strong>
+                  <br />• Todas las respuestas relacionadas a estas preguntas
+                  <br /><br />
+                  Esta acción no se puede deshacer.
+                </p>
+                <div className="flex space-x-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowBulkDeleteConfirm(false)}
+                    className="flex-1"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={deleteSelectedItems}
+                    className="flex-1"
+                  >
+                    Eliminar
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {showDeleteAllConfirm && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+                <div className="flex items-center space-x-3 mb-4">
+                  <div className="flex-shrink-0">
+                    <AlertTriangle className="h-6 w-6 text-red-600" />
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-900">
+                    Confirmar Eliminación Total
+                  </h3>
+                </div>
+                <p className="text-sm text-gray-500 mb-6">
+                  ⚠️ ADVERTENCIA: Estás a punto de eliminar TODAS las preguntas del instrumento ({items.length} pregunta(s)). 
+                  <br /><br />
+                  <strong>Esto también eliminará:</strong>
+                  <br />• Todas las respuestas relacionadas a estas preguntas
+                  <br />• Todos los datos de evaluaciones existentes
+                  <br /><br />
+                  Esta acción es irreversible y afectará a todos los usuarios.
+                </p>
+                <div className="flex space-x-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowDeleteAllConfirm(false)}
+                    className="flex-1"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={deleteAllItems}
+                    className="flex-1"
+                  >
+                    Eliminar Todas
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </main>
     </ProtectedRoute>
