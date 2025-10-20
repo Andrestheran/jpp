@@ -127,9 +127,12 @@ export default function AdminQuestionsPage() {
 
       // Upload evidence files if required
       if (newItem.requires_evidence && evidenceFiles.length > 0) {
+        console.log('📤 Uploading evidence files...', evidenceFiles.length);
         evidenceFileUrls = await uploadEvidenceFiles(evidenceFiles);
+        console.log('✅ Files uploaded successfully:', evidenceFileUrls);
       }
 
+      console.log('💾 Creating item in database...');
       const { error } = await supabase.from("items").insert({
         code: newItem.code,
         title: newItem.title,
@@ -138,8 +141,12 @@ export default function AdminQuestionsPage() {
         evidence_files: evidenceFileUrls.length > 0 ? evidenceFileUrls : null,
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Database error:', error);
+        throw error;
+      }
 
+      console.log('✅ Item created successfully');
       alert("Pregunta creada exitosamente");
       setNewItem({
         code: "",
@@ -152,8 +159,17 @@ export default function AdminQuestionsPage() {
       invalidateDomainsCache(); // Limpiar cache para que se recarguen las preguntas
       loadData();
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Error desconocido";
+      console.error('❌ Error creating item:', error);
+      
+      // Mostrar más detalles del error
+      let errorMessage = "Error desconocido";
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'object' && error !== null) {
+        errorMessage = JSON.stringify(error, null, 2);
+      }
+      
       alert(`Error creating item: ${errorMessage}`);
     }
   };
@@ -313,10 +329,16 @@ export default function AdminQuestionsPage() {
 
     setIsUploadingEvidence(true);
     try {
-      const uploadPromises = files.map(async (file) => {
+      console.log('🚀 Starting upload for', files.length, 'files');
+      
+      const uploadPromises = files.map(async (file, index) => {
+        console.log(`📤 Uploading file ${index + 1}/${files.length}:`, file.name, 'Size:', file.size, 'bytes');
+        
         const fileExt = file.name.split('.').pop();
         const fileName = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
         const filePath = `evidence/${fileName}`;
+
+        console.log('   📍 Upload path:', filePath);
 
         // Upload file to Supabase Storage
         const { data, error } = await supabase.storage
@@ -327,7 +349,8 @@ export default function AdminQuestionsPage() {
           });
 
         if (error) {
-          console.error('Storage upload error:', error);
+          console.error('❌ Storage upload error for', file.name, ':', error);
+          console.error('   Error details:', JSON.stringify(error, null, 2));
           
           // Handle specific storage errors
           if (error.message.includes('Bucket not found') || error.message.includes('not found')) {
@@ -341,18 +364,22 @@ export default function AdminQuestionsPage() {
           }
         }
 
+        console.log('   ✅ File uploaded:', data?.path);
+
         // Get public URL
         const { data: { publicUrl } } = supabase.storage
           .from('multimedia')
           .getPublicUrl(filePath);
 
+        console.log('   🔗 Public URL:', publicUrl);
         return publicUrl;
       });
 
       const uploadedUrls = await Promise.all(uploadPromises);
+      console.log('✅ All files uploaded successfully:', uploadedUrls);
       return uploadedUrls;
     } catch (error) {
-      console.error('Error uploading evidence files:', error);
+      console.error('❌ Error uploading evidence files:', error);
       throw error;
     } finally {
       setIsUploadingEvidence(false);

@@ -5,51 +5,58 @@ Estás recibiendo el error: `El bucket "multimedia" no existe`
 
 ## Solución Paso a Paso
 
-### Paso 1: Verificar el Estado Actual
-En tu consola de Supabase, ve a **SQL Editor** y ejecuta:
+### 🚀 SOLUCIÓN RÁPIDA (Recomendada)
 
-```sql
--- Archivo: sql/verify_bucket.sql
+**Si tienes el error de permisos, ejecuta esto primero:**
+
+En tu Supabase SQL Editor, ejecuta todo el contenido de:
 ```
+sql/complete_storage_fix.sql
+```
+
+Este script hace TODO automáticamente:
+- ✅ Limpia políticas conflictivas
+- ✅ Crea/actualiza el bucket multimedia
+- ✅ Configura las 4 políticas correctamente
+- ✅ Arregla las políticas de user_profiles (necesario para que las otras funcionen)
+- ✅ Te hace admin si usas admin@admin.com
+- ✅ Verifica que todo esté correcto
+
+⚠️ **IMPORTANTE**: Si tu email NO es `admin@admin.com`, edita la línea 91 del script antes de ejecutarlo:
+```sql
+UPDATE user_profiles SET role = 'admin' WHERE email = 'TU_EMAIL@ejemplo.com';
+```
+
+---
+
+### 🔍 Diagnóstico Detallado (Opcional)
+
+Si quieres entender qué está mal antes de arreglarlo:
+
+#### Paso 1: Verificar el Estado Actual
+Ejecuta el contenido de `sql/verify_bucket.sql`
 
 Este script te mostrará:
 - ✅ o ❌ Si el bucket existe
 - ✅ o ❌ Si las políticas están configuradas
 - ✅ o ❌ Si tu usuario es admin
 
-### Paso 2: Interpretar los Resultados
+#### Paso 2: Verificar tu Usuario
+Ejecuta el contenido de `sql/check_user_admin.sql`
 
-#### Caso A: El bucket NO existe
-Si ves `❌ El bucket multimedia NO EXISTE`, ejecuta:
+Esto te muestra:
+- Tu ID de usuario actual
+- Tu rol (admin o user)
+- Todos los usuarios del sistema
 
-```sql
--- Archivo: sql/fix_storage_multimedia.sql
-```
+#### Paso 3: Aplicar la Solución
+Ejecuta `sql/complete_storage_fix.sql` (ver arriba)
 
-Este script:
-1. Elimina cualquier configuración corrupta
-2. Crea el bucket `multimedia` correctamente
-3. Configura las 4 políticas necesarias
-4. Verifica que todo funcione
+#### Paso 4: Verificar de Nuevo
+El script `complete_storage_fix.sql` muestra la verificación automáticamente al final.
+Si quieres verificar de nuevo después, ejecuta `verify_bucket.sql`
 
-#### Caso B: El bucket existe pero las políticas están mal
-Si ves `⚠️ Políticas incompletas`, también ejecuta `fix_storage_multimedia.sql`
-
-#### Caso C: No eres admin
-Si ves `❌ Eres user - NECESITAS ser admin`, ejecuta:
-
-```sql
-UPDATE user_profiles 
-SET role = 'admin' 
-WHERE email = 'tu_email@ejemplo.com';
-```
-
-Reemplaza `tu_email@ejemplo.com` con tu email real.
-
-### Paso 3: Verificar de Nuevo
-Después de ejecutar el fix, vuelve a ejecutar `verify_bucket.sql` para confirmar que todo está ✅
-
-### Paso 4: Probar en la Aplicación
+### Paso 5: Probar en la Aplicación
 1. Ve a `/admin/preguntas` en tu aplicación
 2. Crea una nueva pregunta
 3. Marca "Requiere evidencia"
@@ -60,13 +67,13 @@ Después de ejecutar el fix, vuelve a ejecutar `verify_bucket.sql` para confirma
 
 ### Error: "Bucket not found"
 **Causa**: El bucket no existe en Supabase
-**Solución**: Ejecuta `fix_storage_multimedia.sql`
+**Solución**: Ejecuta `complete_storage_fix.sql` 
 
-### Error: "Permission denied" o "policy"
-**Causa**: Las políticas RLS no están configuradas o tu usuario no es admin
+### Error: "Permission denied" o "No tienes permisos para subir archivos"
+**Causa**: Las políticas RLS no están configuradas correctamente o tu usuario no es admin
 **Solución**: 
-1. Ejecuta `fix_storage_multimedia.sql` para recrear las políticas
-2. Verifica que eres admin con `verify_bucket.sql`
+1. Ejecuta `complete_storage_fix.sql` (arregla políticas Y hace tu usuario admin)
+2. Asegúrate de cambiar el email en el script si no usas admin@admin.com
 
 ### Error: "File too large"
 **Causa**: El archivo supera 50MB
@@ -106,10 +113,12 @@ Si después de seguir todos estos pasos aún tienes problemas:
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `SUPABASE_SERVICE_ROLE_KEY`
 
-## Archivos Modificados
+## Archivos Creados/Modificados
 
-- ✅ `app/admin/preguntas/page.tsx` - Función de upload mejorada
-- ✅ `sql/verify_bucket.sql` - Script de verificación
-- ✅ `sql/fix_storage_multimedia.sql` - Script de corrección
-- ✅ `TROUBLESHOOTING_STORAGE.md` - Esta guía
+- ✅ `app/admin/preguntas/page.tsx` - Función de upload mejorada (sin check de bucket)
+- ✅ `sql/complete_storage_fix.sql` - **Script principal: Arregla todo automáticamente**
+- ✅ `sql/verify_bucket.sql` - Script de verificación diagnóstica
+- ✅ `sql/check_user_admin.sql` - Verifica tu rol de usuario
+- ✅ `sql/fix_storage_multimedia.sql` - Script de corrección alternativo
+- ✅ `TROUBLESHOOTING_STORAGE.md` - Esta guía completa
 
