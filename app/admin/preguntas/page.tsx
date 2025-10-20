@@ -313,18 +313,6 @@ export default function AdminQuestionsPage() {
 
     setIsUploadingEvidence(true);
     try {
-      // First, check if the bucket exists
-      const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
-      
-      if (bucketsError) {
-        throw new Error(`Error checking buckets: ${bucketsError.message}`);
-      }
-
-      const multimediaBucket = buckets?.find(bucket => bucket.id === 'multimedia');
-      if (!multimediaBucket) {
-        throw new Error('El bucket "multimedia" no existe. Por favor, crea el bucket en Supabase Storage siguiendo las instrucciones en SETUP_STORAGE.md');
-      }
-
       const uploadPromises = files.map(async (file) => {
         const fileExt = file.name.split('.').pop();
         const fileName = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
@@ -333,18 +321,23 @@ export default function AdminQuestionsPage() {
         // Upload file to Supabase Storage
         const { data, error } = await supabase.storage
           .from('multimedia')
-          .upload(filePath, file);
+          .upload(filePath, file, {
+            cacheControl: '3600',
+            upsert: false
+          });
 
         if (error) {
+          console.error('Storage upload error:', error);
+          
           // Handle specific storage errors
-          if (error.message.includes('Bucket not found')) {
-            throw new Error('El bucket "multimedia" no existe. Crea el bucket en Supabase Storage.');
-          } else if (error.message.includes('Permission denied')) {
-            throw new Error('No tienes permisos para subir archivos. Verifica que eres administrador.');
-          } else if (error.message.includes('File too large')) {
-            throw new Error('El archivo es demasiado grande. Límite: 50MB por archivo.');
+          if (error.message.includes('Bucket not found') || error.message.includes('not found')) {
+            throw new Error('El bucket "multimedia" no existe. Por favor ejecuta el SQL completo en Supabase para crear el bucket y sus políticas.');
+          } else if (error.message.includes('policy') || error.message.includes('permission') || error.message.includes('denied')) {
+            throw new Error('No tienes permisos para subir archivos. Verifica que: 1) Eres administrador, 2) Las políticas RLS están configuradas correctamente en Supabase.');
+          } else if (error.message.includes('payload') || error.message.includes('large')) {
+            throw new Error(`El archivo "${file.name}" es demasiado grande. Límite: 50MB por archivo.`);
           } else {
-            throw new Error(`Error subiendo archivo: ${error.message}`);
+            throw new Error(`Error subiendo archivo "${file.name}": ${error.message}`);
           }
         }
 
