@@ -610,18 +610,31 @@ export default function AdminQuestionsPage() {
                             {item.title}
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <td className="px-6 py-4 text-sm text-gray-500">
                           {item.requires_evidence ? (
-                            <div className="flex items-center space-x-2">
-                              <span className="text-green-600">Sí</span>
-                              {item.evidence_files && item.evidence_files.length > 0 && (
-                                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-                                  {item.evidence_files.length} archivo(s)
-                                </span>
+                            <div className="flex flex-col space-y-1">
+                              <span className="text-green-600 font-medium">Sí requiere</span>
+                              {item.evidence_files && item.evidence_files.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {item.evidence_files.map((fileUrl, idx) => (
+                                    <a
+                                      key={idx}
+                                      href={fileUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded hover:bg-blue-200 transition"
+                                      title={fileUrl}
+                                    >
+                                      📎 Archivo {idx + 1}
+                                    </a>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-xs text-gray-400">Sin archivos</span>
                               )}
                             </div>
                           ) : (
-                            <span className="text-gray-400">No</span>
+                            <span className="text-gray-400">No requiere</span>
                           )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">

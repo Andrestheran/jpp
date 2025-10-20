@@ -241,6 +241,7 @@ export default function HomePage() {
                   notApplicable={st.notApplicable}
                   evidence={st.evidence}
                   observations={st.observations}
+                  evidenceFiles={it.evidenceFiles}
                   onChange={(patch) => update(it.code, patch)}
                 />
               );

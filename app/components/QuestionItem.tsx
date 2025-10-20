@@ -16,6 +16,7 @@ interface Props {
   notApplicable: boolean;
   evidence: string;
   observations: string;
+  evidenceFiles?: string[]; // Archivos multimedia subidos por el admin
   onChange: (
     patch: Partial<
       Pick<Props, "value" | "notApplicable" | "evidence" | "observations">
@@ -31,9 +32,25 @@ export function QuestionItem({
   notApplicable,
   evidence,
   observations,
+  evidenceFiles = [],
   onChange,
 }: Props) {
   const { isAdmin } = useAuth();
+  
+  // Helper para obtener el tipo de archivo
+  const getFileType = (url: string) => {
+    const ext = url.split('.').pop()?.toLowerCase();
+    if (ext === 'pdf') return 'pdf';
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext || '')) return 'image';
+    if (['mp4', 'webm', 'ogg'].includes(ext || '')) return 'video';
+    return 'unknown';
+  };
+
+  // Helper para obtener el nombre del archivo
+  const getFileName = (url: string) => {
+    return url.split('/').pop() || 'archivo';
+  };
+
   return (
     <div className="rounded-2xl bg-white p-4 shadow-sm space-y-3">
       <div className="flex items-start justify-between gap-4">
@@ -69,10 +86,93 @@ export function QuestionItem({
         ))}
       </RadioGroup>
 
-      {/* Evidencia - visible para todos, editable solo para admin */}
+      {/* Archivos multimedia de evidencia */}
+      {evidenceFiles && evidenceFiles.length > 0 && (
+        <div className="grid gap-2">
+          <Label className="text-sm font-medium text-blue-700">
+            📎 Archivos de Evidencia ({evidenceFiles.length})
+          </Label>
+          <div className="space-y-2">
+            {evidenceFiles.map((fileUrl, idx) => {
+              const fileType = getFileType(fileUrl);
+              const fileName = getFileName(fileUrl);
+
+              return (
+                <div key={idx} className="border rounded-lg p-3 bg-gray-50">
+                  {fileType === 'image' && (
+                    <div className="space-y-2">
+                      <img
+                        src={fileUrl}
+                        alt={`Evidencia ${idx + 1}`}
+                        className="max-w-full h-auto rounded-md"
+                        style={{ maxHeight: '300px' }}
+                      />
+                      <a
+                        href={fileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-600 hover:underline block"
+                      >
+                        🔗 Abrir imagen en nueva pestaña
+                      </a>
+                    </div>
+                  )}
+
+                  {fileType === 'pdf' && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-2xl">📄</span>
+                        <span className="font-medium">{fileName}</span>
+                      </div>
+                      <a
+                        href={fileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-block px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                      >
+                        📖 Ver PDF
+                      </a>
+                    </div>
+                  )}
+
+                  {fileType === 'video' && (
+                    <div className="space-y-2">
+                      <video controls className="w-full max-w-md rounded-md">
+                        <source src={fileUrl} type="video/mp4" />
+                        Tu navegador no soporta video.
+                      </video>
+                      <a
+                        href={fileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-600 hover:underline block"
+                      >
+                        🔗 Abrir video en nueva pestaña
+                      </a>
+                    </div>
+                  )}
+
+                  {fileType === 'unknown' && (
+                    <a
+                      href={fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline text-sm"
+                    >
+                      📎 {fileName}
+                    </a>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Evidencia en texto - visible para todos, editable solo para admin */}
       <div className="grid gap-2">
         <Label htmlFor={`ev-${index}`}>
-          Evidencia (opcional)
+          Evidencia adicional (texto opcional)
           {isAdmin && (
             <span className="text-xs text-gray-500 ml-1">(editable)</span>
           )}
@@ -84,7 +184,7 @@ export function QuestionItem({
           readOnly={!isAdmin}
           className={!isAdmin ? "bg-gray-50 cursor-not-allowed" : ""}
           placeholder={
-            isAdmin ? "Agregar evidencia..." : "Solo visible para usuarios"
+            isAdmin ? "Agregar evidencia en texto..." : "Solo visible para usuarios"
           }
         />
       </div>

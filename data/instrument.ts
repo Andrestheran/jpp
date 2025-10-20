@@ -4,6 +4,7 @@ export type UIItem = {
   code: string;
   title: string;
   requiresEvidence?: boolean;
+  evidenceFiles?: string[]; // URLs de archivos multimedia
   domainCode: string;
 };
 export type UISubsection = {
@@ -56,10 +57,10 @@ export async function loadDomains(): Promise<UIDomain[]> {
 
     console.log("✅ Subsections loaded:", subsectionsData?.length || 0);
 
-    // Cargar items
+    // Cargar items (incluyendo archivos de evidencia)
     const { data: itemsData, error: itemsError } = await supabase
       .from("items")
-      .select("id, subsection_id, code, title, requires_evidence")
+      .select("id, subsection_id, code, title, requires_evidence, evidence_files")
       .order("code");
 
     if (itemsError) {
@@ -85,6 +86,7 @@ export async function loadDomains(): Promise<UIDomain[]> {
               code: item.code,
               title: item.title,
               requiresEvidence: item.requires_evidence || false,
+              evidenceFiles: item.evidence_files || [],
               domainCode: domain.code,
             }));
 
@@ -137,4 +139,5 @@ export async function loadDomains(): Promise<UIDomain[]> {
 // Función para invalidar el cache cuando se agregan nuevas preguntas
 export function invalidateDomainsCache() {
   cachedDomains = null;
+  console.log('🔄 Cache de dominios invalidado');
 }
