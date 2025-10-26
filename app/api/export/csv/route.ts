@@ -4,6 +4,52 @@ import { supabaseAdmin } from "@/lib/supabaseServer";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// Tipos para la respuesta de Supabase
+interface Instrument {
+  key: string;
+  name: string;
+}
+
+interface Evaluation {
+  id: string;
+  created_at: string;
+  context: Record<string, unknown>;
+  instrument_id: string;
+  instruments: Instrument | Instrument[] | null;
+}
+
+interface Domain {
+  code: string;
+  title: string;
+  weight: number;
+}
+
+interface Subsection {
+  code: string;
+  title: string;
+  domain_id: string;
+  domains: Domain | Domain[] | null;
+}
+
+interface Item {
+  code: string;
+  title: string;
+  subsection_id: string;
+  subsections: Subsection | Subsection[] | null;
+}
+
+interface Answer {
+  id: string;
+  evaluation_id: string;
+  item_id: string;
+  score: number | null;
+  not_applicable: boolean;
+  evidence: string | null;
+  observations: string | null;
+  created_at: string;
+  items: Item | Item[] | null;
+}
+
 export async function GET(req: Request) {
   try {
     const sb = supabaseAdmin();
@@ -86,17 +132,20 @@ export async function GET(req: Request) {
 
     // Crear un mapa de evaluaciones para acceso rápido
     const evalMap = new Map(
-      evaluations?.map((e) => [
-        e.id,
-        {
-          ...e,
-          instrument_name: (e.instruments as any)?.name || "N/A",
-        },
-      ]) || []
+      evaluations?.map((e) => {
+        const instruments = Array.isArray(e.instruments) ? e.instruments[0] : e.instruments;
+        return [
+          e.id,
+          {
+            ...e,
+            instrument_name: instruments?.name || "N/A",
+          },
+        ];
+      }) || []
     );
 
     // Función para escapar campos CSV
-    const escapeCsv = (value: any): string => {
+    const escapeCsv = (value: string | number | null | undefined): string => {
       if (value === null || value === undefined) return "";
       const stringValue = String(value);
       // Si contiene comas, comillas o saltos de línea, encerrar en comillas y escapar comillas dobles
@@ -133,11 +182,11 @@ export async function GET(req: Request) {
     csvRows.push(headers.map(h => escapeCsv(h)).join(","));
 
     // Datos simplificados
-    answers?.forEach((answer: any) => {
+    answers?.forEach((answer: Answer) => {
       const evaluation = evalMap.get(answer.evaluation_id);
-      const item = answer.items;
-      const subsection = item?.subsections;
-      const domain = subsection?.domains;
+      const item = Array.isArray(answer.items) ? answer.items[0] : answer.items;
+      const subsection = item && (Array.isArray(item.subsections) ? item.subsections[0] : item.subsections);
+      const domain = subsection && (Array.isArray(subsection.domains) ? subsection.domains[0] : subsection.domains);
       const context = evaluation?.context || {};
       const evalNumber = evalCounter.get(answer.evaluation_id) || 0;
 
@@ -147,11 +196,15 @@ export async function GET(req: Request) {
                         answer.score === 0 ? "No Cumple (0)" : 
                         "Sin respuesta");
 
+      const userName = typeof context.userName === 'string' ? context.userName : null;
+      const userEmail = typeof context.userEmail === 'string' ? context.userEmail : null;
+      const submittedAt = typeof context.submittedAt === 'string' ? context.submittedAt : null;
+
       const row = [
-        escapeCsv(context.userName || context.userEmail || "Anónimo"),
-        escapeCsv(context.userEmail || "-"),
-        escapeCsv(context.submittedAt 
-          ? new Date(context.submittedAt).toLocaleString("es-ES", {
+        escapeCsv(userName || userEmail || "Anónimo"),
+        escapeCsv(userEmail || "-"),
+        escapeCsv(submittedAt 
+          ? new Date(submittedAt).toLocaleString("es-ES", {
               day: '2-digit',
               month: '2-digit',
               year: 'numeric',
