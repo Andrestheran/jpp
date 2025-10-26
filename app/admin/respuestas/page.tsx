@@ -12,7 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 interface Evaluation {
   id: string;
   created_at: string;
-  context: any;
+  context: Record<string, unknown>;
   instrument_id: string;
   instruments?: {
     name: string;
@@ -273,6 +273,10 @@ export default function RespuestasPage() {
                 <div className="divide-y max-h-[600px] overflow-y-auto">
                   {evaluations.map((evaluation) => {
                     const context = evaluation.context || {};
+                    const userName = typeof context.userName === 'string' ? context.userName : null;
+                    const userEmail = typeof context.userEmail === 'string' ? context.userEmail : null;
+                    const submittedAt = typeof context.submittedAt === 'string' ? context.submittedAt : null;
+                    
                     return (
                       <div
                         key={evaluation.id}
@@ -298,16 +302,16 @@ export default function RespuestasPage() {
                               </div>
                               <div className="mt-1">
                                 <p className="text-sm font-medium text-gray-900">
-                                  {context.userName || context.userEmail || "Usuario anónimo"}
+                                  {userName || userEmail || "Usuario anónimo"}
                                 </p>
-                                {context.userEmail && (
+                                {userEmail && (
                                   <p className="text-xs text-gray-600">
-                                    Email: {context.userEmail}
+                                    Email: {userEmail}
                                   </p>
                                 )}
-                                {context.submittedAt && (
+                                {submittedAt && (
                                   <p className="text-xs text-gray-500">
-                                    {new Date(context.submittedAt).toLocaleString("es-ES")}
+                                    {new Date(submittedAt).toLocaleString("es-ES")}
                                   </p>
                                 )}
                               </div>
