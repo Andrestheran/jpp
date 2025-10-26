@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/auth";
 import Link from "next/link";
-import { FileText, Users } from "lucide-react";
+import { FileText, Users, Download, ClipboardList } from "lucide-react";
 
 interface UserProfile {
   id: string;
@@ -122,7 +122,7 @@ export default function AdminPage() {
           </div>
 
           {/* Admin Navigation Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             <Link href="/admin">
               <div className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow cursor-pointer">
                 <div className="flex items-center space-x-4">
@@ -146,6 +146,20 @@ export default function AdminPage() {
                   <div>
                     <h3 className="text-lg font-semibold text-gray-900">Archivos Multimedia</h3>
                     <p className="text-gray-600">Subir y gestionar archivos</p>
+                  </div>
+                </div>
+              </div>
+            </Link>
+            
+            <Link href="/admin/respuestas">
+              <div className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow cursor-pointer">
+                <div className="flex items-center space-x-4">
+                  <div className="p-3 bg-purple-100 rounded-lg">
+                    <ClipboardList className="h-6 w-6 text-purple-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">Respuestas</h3>
+                    <p className="text-gray-600">Ver y exportar respuestas</p>
                   </div>
                 </div>
               </div>

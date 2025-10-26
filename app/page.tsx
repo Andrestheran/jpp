@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { UserHeader } from "@/components/auth/UserHeader";
+import { useAuth } from "@/contexts/AuthContext";
 
 import { QuestionItem } from "./components/QuestionItem";
 
@@ -18,6 +19,7 @@ type State = {
 };
 
 export default function HomePage() {
+  const { user } = useAuth();
   const [page, setPage] = useState(1); // 1..N dominios
   const [domains, setDomains] = useState<UIDomain[]>([]);
   const [loading, setLoading] = useState(true);
@@ -137,7 +139,12 @@ export default function HomePage() {
     const payload = {
       evaluation: {
         instrumentKey: "centro-sim-qa",
-        context: { submittedAt: new Date().toISOString() },
+        context: { 
+          submittedAt: new Date().toISOString(),
+          userId: user?.id || null,
+          userEmail: user?.email || null,
+          userName: user?.profile?.full_name || null,
+        },
       },
       answers: allItems.map((i) => ({
         itemCode: i.code,
