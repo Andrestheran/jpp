@@ -6,7 +6,7 @@ import { UserHeader } from "@/components/auth/UserHeader";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/auth";
 import Link from "next/link";
-import { ArrowLeft, Download, Eye, Trash2, FileSpreadsheet, CheckSquare, Square } from "lucide-react";
+import { ArrowLeft, Download, Eye, Trash2, CheckSquare, Square } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 
 interface Evaluation {
@@ -41,7 +41,6 @@ export default function RespuestasPage() {
   const [loading, setLoading] = useState(true);
   const [loadingAnswers, setLoadingAnswers] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [exportingCsv, setExportingCsv] = useState(false);
 
   useEffect(() => {
     loadEvaluations();
@@ -158,44 +157,13 @@ export default function RespuestasPage() {
     }
   };
 
-  const exportToExcel = async () => {
-    if (selectedForExport.size === 0) {
-      alert("Selecciona al menos una evaluación para exportar");
-      return;
-    }
-
-    setExporting(true);
-    try {
-      const ids = Array.from(selectedForExport).join(",");
-      const response = await fetch(`/api/export?ids=${ids}`);
-      if (!response.ok) {
-        throw new Error("Error al exportar");
-      }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `respuestas_${new Date().toISOString().split("T")[0]}.xlsx`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (error) {
-      console.error("Error exporting:", error);
-      alert("Error al exportar las respuestas");
-    } finally {
-      setExporting(false);
-    }
-  };
-
   const exportToCsv = async () => {
     if (selectedForExport.size === 0) {
       alert("Selecciona al menos una evaluación para exportar");
       return;
     }
 
-    setExportingCsv(true);
+    setExporting(true);
     try {
       const ids = Array.from(selectedForExport).join(",");
       const response = await fetch(`/api/export/csv?ids=${ids}`);
@@ -214,9 +182,9 @@ export default function RespuestasPage() {
       document.body.removeChild(a);
     } catch (error) {
       console.error("Error exporting CSV:", error);
-      alert("Error al exportar las respuestas a CSV");
+      alert("Error al exportar las respuestas");
     } finally {
-      setExportingCsv(false);
+      setExporting(false);
     }
   };
 
@@ -256,25 +224,14 @@ export default function RespuestasPage() {
                 )}
               </div>
             </div>
-            <div className="flex items-center space-x-2">
-              <Button
-                onClick={exportToCsv}
-                disabled={exportingCsv || selectedForExport.size === 0}
-                variant="outline"
-                className="flex items-center space-x-2"
-              >
-                <FileSpreadsheet className="h-4 w-4" />
-                <span>{exportingCsv ? "Exportando..." : "Exportar CSV"}</span>
-              </Button>
-              <Button
-                onClick={exportToExcel}
-                disabled={exporting || selectedForExport.size === 0}
-                className="flex items-center space-x-2"
-              >
-                <Download className="h-4 w-4" />
-                <span>{exporting ? "Exportando..." : "Exportar Excel"}</span>
-              </Button>
-            </div>
+            <Button
+              onClick={exportToCsv}
+              disabled={exporting || selectedForExport.size === 0}
+              className="flex items-center space-x-2"
+            >
+              <Download className="h-4 w-4" />
+              <span>{exporting ? "Exportando..." : "Exportar CSV"}</span>
+            </Button>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
