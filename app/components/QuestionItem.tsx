@@ -169,41 +169,40 @@ export function QuestionItem({
         </div>
       )}
 
-      {/* Evidencia en texto - visible para todos, editable solo para admin */}
-      <div className="grid gap-2">
-        <Label htmlFor={`ev-${index}`}>
-          Evidencia adicional (texto opcional)
-          {isAdmin && (
-            <span className="text-xs text-gray-500 ml-1">(editable)</span>
-          )}
-        </Label>
-        <Textarea
-          id={`ev-${index}`}
-          value={evidence}
-          onChange={(e) => onChange({ evidence: e.target.value })}
-          readOnly={!isAdmin}
-          className={!isAdmin ? "bg-gray-50 cursor-not-allowed" : ""}
-          placeholder={
-            isAdmin ? "Agregar evidencia en texto..." : "Solo visible para usuarios"
-          }
-        />
-      </div>
-
-      {/* Observaciones - solo visible y editable para admin */}
-      {isAdmin && (
+      {/* Evidencia en texto - visible para admin siempre, para usuarios solo si hay contenido */}
+      {(isAdmin || evidence) && (
         <div className="grid gap-2">
-          <Label htmlFor={`ob-${index}`}>
-            Observaciones (solo admin)
-            <span className="text-xs text-purple-600 ml-1">(privado)</span>
+          <Label htmlFor={`ev-${index}`}>
+            Evidencia adicional (texto opcional)
+            {isAdmin && (
+              <span className="text-xs text-gray-500 ml-1">(editable)</span>
+            )}
           </Label>
           <Textarea
-            id={`ob-${index}`}
-            value={observations}
-            onChange={(e) => onChange({ observations: e.target.value })}
-            placeholder="Observaciones internas..."
+            id={`ev-${index}`}
+            value={evidence}
+            onChange={(e) => onChange({ evidence: e.target.value })}
+            readOnly={!isAdmin}
+            className={!isAdmin ? "bg-gray-50 cursor-not-allowed" : ""}
+            placeholder={
+              isAdmin ? "Agregar evidencia en texto..." : "Solo visible para usuarios"
+            }
           />
         </div>
       )}
+
+      {/* Comentarios - visible y editable para todos los usuarios */}
+      <div className="grid gap-2">
+        <Label htmlFor={`ob-${index}`}>
+          Comentarios adicionales (opcional)
+        </Label>
+        <Textarea
+          id={`ob-${index}`}
+          value={observations}
+          onChange={(e) => onChange({ observations: e.target.value })}
+          placeholder="Agrega aquí cualquier comentario adicional sobre esta pregunta..."
+        />
+      </div>
     </div>
   );
 }
