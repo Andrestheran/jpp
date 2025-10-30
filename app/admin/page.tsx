@@ -51,6 +51,25 @@ export default function AdminPage() {
   const createUser = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      // Verificar si el usuario ya existe (maybeSingle no lanza error si no existe)
+      const { data: existingUsers, error: checkError } = await supabase
+        .from("user_profiles")
+        .select("email")
+        .eq("email", newUser.email)
+        .maybeSingle();
+
+      // Si hay un error real en la consulta (no "no encontrado")
+      if (checkError) {
+        throw checkError;
+      }
+
+      // Si encontró un usuario existente
+      if (existingUsers) {
+        alert(`⚠️ El usuario con email ${newUser.email} ya existe en el sistema`);
+        return;
+      }
+
+      // Crear el usuario
       const { data, error } = await supabase.auth.signUp({
         email: newUser.email,
         password: newUser.password,
@@ -61,26 +80,54 @@ export default function AdminPage() {
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        // Manejar errores específicos de Supabase
+        if (error.message.includes("already registered") || error.message.includes("User already registered")) {
+          alert(`⚠️ El usuario con email ${newUser.email} ya existe`);
+          return;
+        }
+        throw error;
+      }
 
-      if (data.user) {
-        // Actualizar el rol si es diferente de 'user'
-        if (newUser.role === "admin") {
-          await supabase
-            .from("user_profiles")
-            .update({ role: "admin" })
-            .eq("id", data.user.id);
+      if (!data.user) {
+        alert("❌ No se pudo crear el usuario. Intenta de nuevo.");
+        return;
+      }
+
+      // Esperar un momento para que se cree el perfil automáticamente
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Actualizar el rol y nombre si es necesario
+      const updates: any = {};
+      if (newUser.role === "admin") {
+        updates.role = "admin";
+      }
+      if (newUser.fullName) {
+        updates.full_name = newUser.fullName;
+      }
+
+      if (Object.keys(updates).length > 0) {
+        const { error: updateError } = await supabase
+          .from("user_profiles")
+          .update(updates)
+          .eq("id", data.user.id);
+
+        if (updateError) {
+          console.error("Error updating profile:", updateError);
         }
       }
 
-      alert("Usuario creado exitosamente");
+      alert("✅ Usuario creado exitosamente");
       setNewUser({ email: "", password: "", role: "user", fullName: "" });
       setShowCreateForm(false);
-      loadUsers();
+      
+      // Recargar usuarios después de un breve delay
+      setTimeout(() => loadUsers(), 500);
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Error desconocido";
-      alert(`Error creating user: ${errorMessage}`);
+      console.error("Error creating user:", error);
+      alert(`❌ Error al crear usuario: ${errorMessage}`);
     }
   };
 

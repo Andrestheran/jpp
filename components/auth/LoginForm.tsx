@@ -17,13 +17,21 @@ export function LoginForm() {
     setLoading(true);
     setError("");
 
+    // Timeout de seguridad - si tarda más de 8 segundos, mostrar error
+    const timeoutId = setTimeout(() => {
+      setError("El inicio de sesión está tomando demasiado tiempo. Por favor, recarga la página e intenta de nuevo.");
+      setLoading(false);
+    }, 8000);
+
     try {
       await signIn(email, password);
+      clearTimeout(timeoutId);
+      // Si llega aquí, el login fue exitoso y onAuthStateChange manejará la redirección
     } catch (err) {
+      clearTimeout(timeoutId);
       const errorMessage =
         err instanceof Error ? err.message : "Error al iniciar sesión";
       setError(errorMessage);
-    } finally {
       setLoading(false);
     }
   };
@@ -77,7 +85,7 @@ export function LoginForm() {
             </div>
           )}
 
-          <div>
+          <div className="space-y-2">
             <Button
               type="submit"
               disabled={loading}
@@ -85,7 +93,29 @@ export function LoginForm() {
             >
               {loading ? "Iniciando sesión..." : "Iniciar Sesión"}
             </Button>
+            
+            {loading && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setLoading(false);
+                  setError("Inicio de sesión cancelado. Intenta de nuevo.");
+                }}
+                className="w-full"
+              >
+                Cancelar
+              </Button>
+            )}
           </div>
+
+          {loading && (
+            <div className="text-center">
+              <p className="text-xs text-gray-500">
+                Si tarda más de 10 segundos, haz clic en Cancelar y recarga la página
+              </p>
+            </div>
+          )}
         </form>
       </div>
     </div>

@@ -33,8 +33,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (isMounted) {
         console.warn("⚠️ Auth loading timeout - forcing loading to false");
         setLoading(false);
+        // Si el usuario no se cargó después del timeout, limpiar
+        setUser(null);
       }
-    }, 5000); // 5 segundos máximo
+    }, 7000); // 7 segundos máximo
 
     // Get initial session
     const getInitialSession = async () => {

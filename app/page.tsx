@@ -39,7 +39,7 @@ export default function HomePage() {
         setLoading(false);
         setInitialized(true);
       }
-    }, 10000); // 10 segundos timeout
+    }, 6000); // 6 segundos timeout
 
     const loadData = async () => {
       try {
