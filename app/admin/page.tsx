@@ -98,7 +98,10 @@ export default function AdminPage() {
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       // Actualizar el rol y nombre si es necesario
-      const updates: any = {};
+      const updates: {
+        role?: "admin" | "user";
+        full_name?: string;
+      } = {};
       if (newUser.role === "admin") {
         updates.role = "admin";
       }
