@@ -25,22 +25,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
+
+    // Timeout de seguridad para evitar carga infinita
+    const loadingTimeout = setTimeout(() => {
+      if (isMounted) {
+        console.warn("⚠️ Auth loading timeout - forcing loading to false");
+        setLoading(false);
+      }
+    }, 5000); // 5 segundos máximo
+
     // Get initial session
     const getInitialSession = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
 
-      if (session?.user) {
-        const profile = await getUserProfile(session.user.id);
-        setUser({
-          id: session.user.id,
-          email: session.user.email!,
-          profile,
-        });
+        if (isMounted) {
+          if (session?.user) {
+            const profile = await getUserProfile(session.user.id);
+            setUser({
+              id: session.user.id,
+              email: session.user.email!,
+              profile,
+            });
+          } else {
+            setUser(null);
+          }
+          setLoading(false);
+          clearTimeout(loadingTimeout);
+        }
+      } catch (error) {
+        console.error("Error getting initial session:", error);
+        if (isMounted) {
+          setUser(null);
+          setLoading(false);
+          clearTimeout(loadingTimeout);
+        }
       }
-
-      setLoading(false);
     };
 
     getInitialSession();
@@ -49,20 +72,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        const profile = await getUserProfile(session.user.id);
-        setUser({
-          id: session.user.id,
-          email: session.user.email!,
-          profile,
-        });
-      } else {
-        setUser(null);
+      console.log("🔐 Auth state change:", event);
+      
+      if (!isMounted) return;
+
+      try {
+        if (session?.user) {
+          const profile = await getUserProfile(session.user.id);
+          if (isMounted) {
+            setUser({
+              id: session.user.id,
+              email: session.user.email!,
+              profile,
+            });
+          }
+        } else {
+          if (isMounted) {
+            setUser(null);
+          }
+        }
+      } catch (error) {
+        console.error("Error in auth state change:", error);
+        if (isMounted) {
+          setUser(null);
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
       }
-      setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      clearTimeout(loadingTimeout);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {
@@ -75,14 +120,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw error;
     }
 
-    if (data.user) {
-      const profile = await getUserProfile(data.user.id);
-      setUser({
-        id: data.user.id,
-        email: data.user.email!,
-        profile,
-      });
-    }
+    // No necesitamos setear el user aquí porque onAuthStateChange lo manejará
+    // Esto evita la doble carga del perfil
   };
 
   const signOut = async () => {

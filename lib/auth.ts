@@ -3,7 +3,14 @@ import { createClient } from "@supabase/supabase-js";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true,
+    storage: typeof window !== "undefined" ? window.localStorage : undefined,
+  },
+});
 
 export type UserRole = "admin" | "user";
 
@@ -20,22 +27,52 @@ export interface AuthUser {
   profile: UserProfile | null;
 }
 
+// Función para limpiar sesiones corruptas
+export async function clearCorruptedSession() {
+  try {
+    await supabase.auth.signOut();
+    if (typeof window !== "undefined") {
+      // Limpiar localStorage por si hay datos corruptos
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith("sb-")) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach((key) => localStorage.removeItem(key));
+    }
+  } catch (error) {
+    console.error("Error clearing session:", error);
+  }
+}
+
 // Función para obtener el perfil del usuario con su rol
 export async function getUserProfile(
   userId: string
 ): Promise<UserProfile | null> {
-  const { data, error } = await supabase
-    .from("user_profiles")
-    .select("*")
-    .eq("id", userId)
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from("user_profiles")
+      .select("*")
+      .eq("id", userId)
+      .single();
 
-  if (error) {
-    console.error("Error fetching user profile:", error);
+    if (error) {
+      console.error("Error fetching user profile:", error);
+      // Si el perfil no existe, es un error crítico
+      if (error.code === "PGRST116") {
+        console.error("User profile not found for user:", userId);
+        await clearCorruptedSession();
+      }
+      return null;
+    }
+
+    return data;
+  } catch (error) {
+    console.error("Unexpected error in getUserProfile:", error);
     return null;
   }
-
-  return data;
 }
 
 // Función para login
