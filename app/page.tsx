@@ -23,6 +23,7 @@ export default function HomePage() {
   const [page, setPage] = useState(1); // 1..N dominios
   const [domains, setDomains] = useState<UIDomain[]>([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
   const [answers, setAnswers] = useState<Record<string, State>>({});
   const [initialized, setInitialized] = useState(false);
@@ -122,43 +123,57 @@ export default function HomePage() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    console.log("🚀 Submit function called");
-
-    // Validación global
-    const incomplete = allItems.some(
-      (i) => !(answers[i.code].notApplicable || answers[i.code].value !== null)
-    );
-    console.log("❓ Incomplete answers:", incomplete);
-    console.log("📊 All answers:", answers);
-
-    if (incomplete) {
-      alert("Faltan respuestas");
+    
+    // Evitar doble envío
+    if (submitting) {
+      console.log("⏳ Ya se está enviando, ignorando...");
       return;
     }
-
-    const payload = {
-      evaluation: {
-        instrumentKey: "centro-sim-qa",
-        context: { 
-          submittedAt: new Date().toISOString(),
-          userId: user?.id || null,
-          userEmail: user?.email || null,
-          userName: user?.profile?.full_name || null,
-        },
-      },
-      answers: allItems.map((i) => ({
-        itemCode: i.code,
-        domainCode: i.domainCode,
-        score: answers[i.code].notApplicable ? null : answers[i.code].value,
-        notApplicable: answers[i.code].notApplicable,
-        evidence: answers[i.code].evidence || undefined,
-        observations: answers[i.code].observations || undefined,
-      })),
-    };
-
-    console.log("📦 Payload to send:", payload);
+    
+    setSubmitting(true);
+    console.log("🚀 Submit function called");
 
     try {
+      // Validación global
+      const incomplete = allItems.some(
+        (i) => !(answers[i.code].notApplicable || answers[i.code].value !== null)
+      );
+      console.log("❓ Incomplete answers:", incomplete);
+      console.log("📊 All answers:", answers);
+
+      if (incomplete) {
+        alert("Faltan respuestas");
+        return;
+      }
+
+      // Deduplicar items por código (por si acaso)
+      const uniqueItems = Array.from(
+        new Map(allItems.map(item => [item.code, item])).values()
+      );
+
+      const payload = {
+        evaluation: {
+          instrumentKey: "centro-sim-qa",
+          context: { 
+            submittedAt: new Date().toISOString(),
+            userId: user?.id || null,
+            userEmail: user?.email || null,
+            userName: user?.profile?.full_name || null,
+          },
+        },
+        answers: uniqueItems.map((i) => ({
+          itemCode: i.code,
+          domainCode: i.domainCode,
+          score: answers[i.code].notApplicable ? null : answers[i.code].value,
+          notApplicable: answers[i.code].notApplicable,
+          evidence: answers[i.code].evidence || undefined,
+          observations: answers[i.code].observations || undefined,
+        })),
+      };
+
+      console.log("📦 Payload to send:", payload);
+      console.log(`📊 Enviando ${payload.answers.length} respuestas únicas`);
+
       console.log("🌐 Sending request to /api/submit");
       const res = await fetch("/api/submit", {
         method: "POST",
@@ -175,9 +190,14 @@ export default function HomePage() {
       }
 
       alert("✅ ¡Respuestas enviadas correctamente!");
+      
+      // Opcionalmente, limpiar el formulario o redirigir
+      // window.location.href = "/";
     } catch (err) {
       console.error("❌ Error in submit:", err);
       alert(`Error al enviar las respuestas: ${err}`);
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -273,8 +293,11 @@ export default function HomePage() {
                   Siguiente
                 </Button>
               ) : (
-                <Button type="submit" disabled={!pageComplete}>
-                  Enviar
+                <Button 
+                  type="submit" 
+                  disabled={!pageComplete || submitting}
+                >
+                  {submitting ? "Enviando..." : "Enviar"}
                 </Button>
               )}
             </div>
