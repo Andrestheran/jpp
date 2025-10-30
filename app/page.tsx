@@ -223,8 +223,34 @@ export default function HomePage() {
         <UserHeader />
         <main className="min-h-screen bg-gray-50">
           <div className="mx-auto max-w-3xl p-6 space-y-6">
-            <div className="text-center">
-              <p className="text-gray-600">No hay preguntas disponibles.</p>
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
+              <h2 className="text-xl font-semibold text-yellow-900 mb-2">
+                ⚠️ No se pudieron cargar las preguntas
+              </h2>
+              <p className="text-yellow-800 mb-4">
+                Puede ser un problema de permisos en la base de datos.
+              </p>
+              <details className="text-left text-sm text-yellow-700 bg-yellow-100 p-4 rounded">
+                <summary className="cursor-pointer font-semibold mb-2">
+                  🔧 Información para el administrador
+                </summary>
+                <p className="mb-2">
+                  Si eres el administrador del sistema, ejecuta el script SQL:
+                </p>
+                <code className="block bg-yellow-200 p-2 rounded text-xs">
+                  sql/fix_infinite_recursion.sql
+                </code>
+                <p className="mt-2 text-xs">
+                  Este script arregla los permisos de lectura de las preguntas.
+                  Revisa la consola del navegador (F12) para más detalles.
+                </p>
+              </details>
+              <Button 
+                onClick={() => window.location.reload()} 
+                className="mt-4"
+              >
+                🔄 Reintentar
+              </Button>
             </div>
           </div>
         </main>
