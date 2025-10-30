@@ -112,6 +112,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signIn = async (email: string, password: string) => {
+    // Limpiar cualquier sesión anterior y caché antes de iniciar
+    invalidateDomainsCache();
+    
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
