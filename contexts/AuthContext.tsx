@@ -8,6 +8,7 @@ import {
   type UserProfile,
   type AuthUser,
 } from "@/lib/auth";
+import { invalidateDomainsCache } from "@/data/instrument";
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -125,8 +126,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
+    try {
+      // Cerrar sesión en Supabase
+      await supabase.auth.signOut();
+      
+      // Limpiar estado local
+      setUser(null);
+      
+      // Limpiar caché de dominios
+      invalidateDomainsCache();
+      
+      // Limpiar localStorage de Supabase por si acaso
+      if (typeof window !== "undefined") {
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith("sb-")) {
+            keysToRemove.push(key);
+          }
+        }
+        keysToRemove.forEach((key) => localStorage.removeItem(key));
+      }
+      
+      // Recargar la página para limpiar completamente el estado
+      if (typeof window !== "undefined") {
+        window.location.href = "/";
+      }
+    } catch (error) {
+      console.error("Error during sign out:", error);
+      // Aún así, intentar limpiar y recargar
+      setUser(null);
+      invalidateDomainsCache();
+      if (typeof window !== "undefined") {
+        window.location.href = "/";
+      }
+    }
   };
 
   const isAdmin = user?.profile?.role === "admin";
