@@ -23,16 +23,6 @@ export type UIDomain = {
 // Cache para evitar múltiples consultas
 let cachedDomains: UIDomain[] | null = null;
 
-// Helper para agregar timeout a las promesas
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error(`Timeout after ${timeoutMs}ms`)), timeoutMs)
-    ),
-  ]);
-}
-
 export async function loadDomains(): Promise<UIDomain[]> {
   if (cachedDomains) {
     console.log("📦 Using cached domains");
@@ -42,16 +32,11 @@ export async function loadDomains(): Promise<UIDomain[]> {
   try {
     console.log("🔄 Loading domains from database...");
 
-    // Cargar dominios con timeout
-    const domainsPromise = supabase
+    // Cargar dominios
+    const { data: domainsData, error: domainsError } = await supabase
       .from("domains")
       .select("id, code, title, weight")
       .order("code");
-
-    const { data: domainsData, error: domainsError } = await withTimeout(
-      domainsPromise,
-      5000
-    );
 
     if (domainsError) {
       console.error("❌ Error loading domains:", domainsError);
@@ -64,16 +49,11 @@ export async function loadDomains(): Promise<UIDomain[]> {
 
     console.log("✅ Domains loaded:", domainsData.length);
 
-    // Cargar subsecciones con timeout
-    const subsectionsPromise = supabase
+    // Cargar subsecciones
+    const { data: subsectionsData, error: subsectionsError } = await supabase
       .from("subsections")
       .select("id, domain_id, code, title")
       .order("code");
-
-    const { data: subsectionsData, error: subsectionsError } = await withTimeout(
-      subsectionsPromise,
-      5000
-    );
 
     if (subsectionsError) {
       console.error("❌ Error loading subsections:", subsectionsError);
@@ -82,16 +62,11 @@ export async function loadDomains(): Promise<UIDomain[]> {
 
     console.log("✅ Subsections loaded:", subsectionsData?.length || 0);
 
-    // Cargar items con timeout
-    const itemsPromise = supabase
+    // Cargar items
+    const { data: itemsData, error: itemsError } = await supabase
       .from("items")
       .select("id, subsection_id, code, title, requires_evidence, evidence_files")
       .order("code");
-
-    const { data: itemsData, error: itemsError } = await withTimeout(
-      itemsPromise,
-      5000
-    );
 
     if (itemsError) {
       console.error("❌ Error loading items:", itemsError);
@@ -106,13 +81,13 @@ export async function loadDomains(): Promise<UIDomain[]> {
     }
 
     // Transformar datos al formato UI
-    const domains: UIDomain[] = domainsData.map((domain) => {
+    const domains: UIDomain[] = domainsData.map((domain: any) => {
       const domainSubsections = subsectionsData
-        .filter((s) => s.domain_id === domain.id)
-        .map((subsection) => {
+        .filter((s: any) => s.domain_id === domain.id)
+        .map((subsection: any) => {
           const subsectionItems = itemsData
-            .filter((i) => i.subsection_id === subsection.id)
-            .map((item) => ({
+            .filter((i: any) => i.subsection_id === subsection.id)
+            .map((item: any) => ({
               code: item.code,
               title: item.title,
               requiresEvidence: item.requires_evidence || false,
