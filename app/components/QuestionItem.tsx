@@ -11,6 +11,7 @@ type Score = 0 | 1 | 2 | null;
 interface Props {
   index: number;
   itemCode: string;
+  displayNumber?: number; // Número de visualización secuencial
   question: string;
   value: Score;
   notApplicable: boolean;
@@ -27,6 +28,7 @@ interface Props {
 export function QuestionItem({
   index,
   itemCode,
+  displayNumber,
   question,
   value,
   notApplicable,
@@ -55,7 +57,7 @@ export function QuestionItem({
     <div className="rounded-2xl bg-white p-4 shadow-sm space-y-3">
       <div className="flex items-start justify-between gap-4">
         <Label className="font-medium">
-          {itemCode}. {question}
+          {displayNumber || itemCode}. {question}
         </Label>
         <div className="flex items-center gap-2">
           <Checkbox

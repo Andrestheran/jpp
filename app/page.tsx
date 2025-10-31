@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useEffect } from "react";
-import { loadDomains, type UIDomain } from "@/data/instrument";
+import { loadDomains, invalidateDomainsCache, type UIDomain } from "@/data/instrument";
 
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -32,6 +32,9 @@ export default function HomePage() {
   useEffect(() => {
     let isMounted = true;
 
+    // Invalidar caché al iniciar para evitar datos duplicados
+    invalidateDomainsCache();
+
     // Timeout de seguridad para evitar carga infinita
     const timeoutId = setTimeout(() => {
       if (isMounted && loading) {
@@ -48,14 +51,30 @@ export default function HomePage() {
           setDomains(domainsData);
 
           // Inicializar respuestas
-          const allItems = domainsData.flatMap((d) =>
+          const allItemsTemp = domainsData.flatMap((d) =>
             d.subsections.flatMap((s) => s.items.map((i) => ({ ...i })))
           );
 
-          if (allItems.length > 0) {
+          console.log(`📊 Total items cargados: ${allItemsTemp.length}`);
+
+          // Verificar códigos duplicados (normal en diferentes dominios)
+          const codeMap = new Map<string, number>();
+          allItemsTemp.forEach(item => {
+            codeMap.set(item.code, (codeMap.get(item.code) || 0) + 1);
+          });
+          
+          const duplicates = Array.from(codeMap.entries()).filter(([_, count]) => count > 1);
+          if (duplicates.length > 0) {
+            console.log("ℹ️ Códigos repetidos en diferentes dominios (esto es normal):");
+            duplicates.forEach(([code, count]) => {
+              console.log(`  - Código "${code}" aparece ${count} veces en diferentes dominios`);
+            });
+          }
+
+          if (allItemsTemp.length > 0) {
             const initialAnswers = Object.fromEntries(
-              allItems.map((i) => [
-                i.code,
+              allItemsTemp.map((i) => [
+                i.id, // Usar ID único en lugar de code
                 {
                   value: null,
                   notApplicable: false,
@@ -65,6 +84,7 @@ export default function HomePage() {
               ])
             );
             setAnswers(initialAnswers);
+            console.log(`📝 Inicializadas ${Object.keys(initialAnswers).length} respuestas con IDs únicos`);
           }
 
           setInitialized(true);
@@ -93,18 +113,32 @@ export default function HomePage() {
 
   // Estado por itemCode - usar useMemo para evitar recálculos innecesarios
   const allItems = useMemo(() => {
-    return domains.flatMap((d) =>
+    const items = domains.flatMap((d) =>
       d.subsections.flatMap((s) => s.items.map((i) => ({ ...i })))
     );
+    console.log(`📊 Total allItems: ${items.length}`);
+    return items;
   }, [domains]);
 
   const pageCount = domains.length;
   const currentDomain = domains[page - 1];
 
-  const domainItems = useMemo(
-    () => currentDomain?.subsections.flatMap((s) => s.items) || [],
-    [currentDomain]
-  );
+  const domainItems = useMemo(() => {
+    if (!currentDomain) return [];
+    const items = currentDomain.subsections.flatMap((s) => s.items);
+    console.log(`📊 Domain ${page} tiene ${items.length} items`);
+    console.log(`📋 Códigos del dominio ${page}:`, items.map(i => i.code));
+    
+    // Verificar el estado actual de estas preguntas
+    items.forEach(item => {
+      const state = answers[item.code];
+      if (state && state.value !== null) {
+        console.warn(`⚠️ Item ${item.code} ya tiene valor: ${state.value}`);
+      }
+    });
+    
+    return items;
+  }, [currentDomain, page, answers]);
 
   const totalAnswered = Object.values(answers).filter(
     (a) => a.notApplicable || a.value !== null
@@ -115,11 +149,11 @@ export default function HomePage() {
       : 0;
 
   const pageComplete = domainItems.every(
-    (i) => answers[i.code]?.notApplicable || answers[i.code]?.value !== null
+    (i) => answers[i.id]?.notApplicable || answers[i.id]?.value !== null
   );
 
-  const update = (code: string, patch: Partial<State>) =>
-    setAnswers((prev) => ({ ...prev, [code]: { ...prev[code], ...patch } }));
+  const update = (itemId: string, patch: Partial<State>) =>
+    setAnswers((prev) => ({ ...prev, [itemId]: { ...prev[itemId], ...patch } }));
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -136,7 +170,7 @@ export default function HomePage() {
     try {
       // Validación global
       const incomplete = allItems.some(
-        (i) => !(answers[i.code].notApplicable || answers[i.code].value !== null)
+        (i) => !(answers[i.id].notApplicable || answers[i.id].value !== null)
       );
       console.log("❓ Incomplete answers:", incomplete);
       console.log("📊 All answers:", answers);
@@ -145,11 +179,6 @@ export default function HomePage() {
         alert("Faltan respuestas");
         return;
       }
-
-      // Deduplicar items por código (por si acaso)
-      const uniqueItems = Array.from(
-        new Map(allItems.map(item => [item.code, item])).values()
-      );
 
       const payload = {
         evaluation: {
@@ -161,13 +190,13 @@ export default function HomePage() {
             userName: user?.profile?.full_name || null,
           },
         },
-        answers: uniqueItems.map((i) => ({
+        answers: allItems.map((i) => ({
           itemCode: i.code,
           domainCode: i.domainCode,
-          score: answers[i.code].notApplicable ? null : answers[i.code].value,
-          notApplicable: answers[i.code].notApplicable,
-          evidence: answers[i.code].evidence || undefined,
-          observations: answers[i.code].observations || undefined,
+          score: answers[i.id].notApplicable ? null : answers[i.id].value,
+          notApplicable: answers[i.id].notApplicable,
+          evidence: answers[i.id].evidence || undefined,
+          observations: answers[i.id].observations || undefined,
         })),
       };
 
@@ -281,21 +310,22 @@ export default function HomePage() {
 
           <form onSubmit={submit} className="space-y-6">
             {domainItems.map((it, i) => {
-              const st = answers[it.code];
+              const st = answers[it.id];
               if (!st) return null; // Evitar error si aún no se han cargado las respuestas
 
               return (
                 <QuestionItem
-                  key={it.code}
+                  key={it.id}
                   index={i}
                   itemCode={it.code}
+                  displayNumber={it.displayNumber}
                   question={it.title}
                   value={st.value}
                   notApplicable={st.notApplicable}
                   evidence={st.evidence}
                   observations={st.observations}
                   evidenceFiles={it.evidenceFiles}
-                  onChange={(patch) => update(it.code, patch)}
+                  onChange={(patch) => update(it.id, patch)}
                 />
               );
             })}

@@ -1,11 +1,13 @@
 import { supabase } from "@/lib/auth";
 
 export type UIItem = {
+  id: string; // ID único de la base de datos
   code: string;
   title: string;
   requiresEvidence?: boolean;
   evidenceFiles?: string[]; // URLs de archivos multimedia
   domainCode: string;
+  displayNumber?: number; // Número de visualización secuencial
 };
 export type UISubsection = {
   code: string;
@@ -80,20 +82,26 @@ export async function loadDomains(): Promise<UIDomain[]> {
       throw new Error("Missing data from database");
     }
 
-    // Transformar datos al formato UI
+    // Transformar datos al formato UI con numeración secuencial
+    let globalItemNumber = 1;
     const domains: UIDomain[] = domainsData.map((domain: any) => {
       const domainSubsections = subsectionsData
         .filter((s: any) => s.domain_id === domain.id)
         .map((subsection: any) => {
           const subsectionItems = itemsData
             .filter((i: any) => i.subsection_id === subsection.id)
-            .map((item: any) => ({
-              code: item.code,
-              title: item.title,
-              requiresEvidence: item.requires_evidence || false,
-              evidenceFiles: item.evidence_files || [],
-              domainCode: domain.code,
-            }));
+            .map((item: any) => {
+              const itemWithNumber = {
+                id: item.id, // ID único de la base de datos
+                code: item.code, // Mantenemos el código original para referencias
+                title: item.title,
+                requiresEvidence: item.requires_evidence || false,
+                evidenceFiles: item.evidence_files || [],
+                domainCode: domain.code,
+                displayNumber: globalItemNumber++, // Numeración secuencial
+              };
+              return itemWithNumber;
+            });
 
           return {
             code: subsection.code,
@@ -111,7 +119,22 @@ export async function loadDomains(): Promise<UIDomain[]> {
       };
     });
 
+    // Contar total de items
+    const totalItems = domains.reduce((total, domain) => {
+      return total + domain.subsections.reduce((subTotal, subsection) => {
+        return subTotal + subsection.items.length;
+      }, 0);
+    }, 0);
+
     console.log("✅ Domains loaded successfully:", domains.length);
+    console.log(`📊 Total items across all domains: ${totalItems}`);
+    
+    // Log detallado por dominio
+    domains.forEach((domain, idx) => {
+      const domainItemCount = domain.subsections.reduce((sum, sub) => sum + sub.items.length, 0);
+      console.log(`  Dominio ${idx + 1} (${domain.code}): ${domainItemCount} items`);
+    });
+
     cachedDomains = domains;
     return domains;
   } catch (error) {
@@ -129,9 +152,11 @@ export async function loadDomains(): Promise<UIDomain[]> {
             domainCode: "1",
             items: [
               {
+                id: "error-1",
                 code: "1.1",
                 title: "Error al cargar preguntas desde la base de datos",
                 domainCode: "1",
+                displayNumber: 1,
               },
             ],
           },
@@ -139,6 +164,15 @@ export async function loadDomains(): Promise<UIDomain[]> {
       },
     ];
   }
+}
+
+// Función para contar total de items
+export function countTotalItems(domains: UIDomain[]): number {
+  return domains.reduce((total, domain) => {
+    return total + domain.subsections.reduce((subTotal, subsection) => {
+      return subTotal + subsection.items.length;
+    }, 0);
+  }, 0);
 }
 
 // Función para invalidar el cache cuando se agregan nuevas preguntas
