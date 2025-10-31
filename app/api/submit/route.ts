@@ -108,12 +108,18 @@ export async function POST(req: Request) {
   }
 
   // 4) Insert masivo de respuestas
+  console.log(`📊 Procesando ${body.answers.length} respuestas del frontend`);
+  
   const rows = body.answers
-    .map((a) => {
+    .map((a, index) => {
       const item_id = a.itemId || codeToId.get(a.itemCode!);
       
       if (!item_id) {
-        console.error(`No se encontró item_id para:`, a);
+        console.error(`❌ No se encontró item_id para respuesta ${index}:`, {
+          itemId: a.itemId,
+          itemCode: a.itemCode,
+          domainCode: a.domainCode
+        });
         return null;
       }
 
@@ -128,6 +134,24 @@ export async function POST(req: Request) {
     })
     .filter((row): row is NonNullable<typeof row> => row !== null);
   
+  console.log(`✅ Se generaron ${rows.length} filas válidas`);
+  
+  // Verificar duplicados ANTES de deduplicar
+  const itemIdCounts = new Map<string, number>();
+  rows.forEach(row => {
+    itemIdCounts.set(row.item_id, (itemIdCounts.get(row.item_id) || 0) + 1);
+  });
+  
+  const duplicateItemIds = Array.from(itemIdCounts.entries())
+    .filter(([_, count]) => count > 1);
+  
+  if (duplicateItemIds.length > 0) {
+    console.error(`🚨 DUPLICADOS DETECTADOS (${duplicateItemIds.length} items con duplicados):`);
+    duplicateItemIds.forEach(([item_id, count]) => {
+      console.error(`  - item_id "${item_id}" aparece ${count} veces`);
+    });
+  }
+  
   // Deduplicar por item_id para evitar duplicados
   const uniqueRows = Array.from(
     new Map(rows.map(row => [row.item_id, row])).values()
@@ -135,6 +159,9 @@ export async function POST(req: Request) {
   
   if (uniqueRows.length < rows.length) {
     console.warn(`⚠️ Se eliminaron ${rows.length - uniqueRows.length} respuestas duplicadas`);
+    console.warn(`📊 Respuestas finales: ${uniqueRows.length} de ${body.answers.length} originales`);
+  } else {
+    console.log(`✅ No hay duplicados. Insertando ${uniqueRows.length} respuestas únicas`);
   }
 
   if (uniqueRows.length === 0) {

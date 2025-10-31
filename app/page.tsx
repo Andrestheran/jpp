@@ -24,6 +24,7 @@ export default function HomePage() {
   const [domains, setDomains] = useState<UIDomain[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false); // Flag para prevenir reenvíos
 
   const [answers, setAnswers] = useState<Record<string, State>>({});
   const [initialized, setInitialized] = useState(false);
@@ -116,7 +117,24 @@ export default function HomePage() {
     const items = domains.flatMap((d) =>
       d.subsections.flatMap((s) => s.items.map((i) => ({ ...i })))
     );
+    
+    // Verificar duplicados por ID
+    const idCounts = new Map<string, number>();
+    items.forEach(item => {
+      idCounts.set(item.id, (idCounts.get(item.id) || 0) + 1);
+    });
+    
+    const duplicates = Array.from(idCounts.entries()).filter(([_, count]) => count > 1);
+    
     console.log(`📊 Total allItems: ${items.length}`);
+    console.log(`🔑 IDs únicos: ${idCounts.size}`);
+    
+    if (duplicates.length > 0) {
+      console.error(`🚨 HAY ${items.length - idCounts.size} ITEMS DUPLICADOS EN allItems!`);
+      console.error(`Items con IDs duplicados:`, duplicates);
+      alert(`⚠️ ERROR: Hay ${items.length - idCounts.size} items duplicados en la carga de datos. Total: ${items.length}, Únicos: ${idCounts.size}. Revisa la consola.`);
+    }
+    
     return items;
   }, [domains]);
 
@@ -158,9 +176,17 @@ export default function HomePage() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     
-    // Evitar doble envío
+    // Prevenir reenvío si ya se envió exitosamente
+    if (submitted) {
+      console.log("✅ Ya se envió exitosamente. Recarga la página para enviar de nuevo.");
+      alert("✅ Esta evaluación ya fue enviada exitosamente. Recarga la página (F5) si necesitas enviar una nueva evaluación.");
+      return;
+    }
+    
+    // Evitar doble envío - bloquear inmediatamente
     if (submitting) {
       console.log("⏳ Ya se está enviando, ignorando...");
+      alert("⏳ Ya se está enviando, por favor espera...");
       return;
     }
     
@@ -180,6 +206,32 @@ export default function HomePage() {
         return;
       }
 
+      const answersToSend = allItems.map((i) => ({
+        itemId: i.id, // ID único del item
+        itemCode: i.code, // Código para referencia
+        domainCode: i.domainCode,
+        score: answers[i.id].notApplicable ? null : answers[i.id].value,
+        notApplicable: answers[i.id].notApplicable,
+        evidence: answers[i.id].evidence || undefined,
+        observations: answers[i.id].observations || undefined,
+      }));
+
+      // Verificar duplicados en itemIds
+      const itemIdCounts = new Map<string, number>();
+      answersToSend.forEach(a => {
+        itemIdCounts.set(a.itemId, (itemIdCounts.get(a.itemId) || 0) + 1);
+      });
+      const duplicateIds = Array.from(itemIdCounts.entries()).filter(([_, count]) => count > 1);
+      
+      if (duplicateIds.length > 0) {
+        console.error(`🚨 DUPLICADOS EN FRONTEND (${duplicateIds.length} items):`);
+        duplicateIds.forEach(([id, count]) => {
+          console.error(`  - itemId "${id}" aparece ${count} veces`);
+        });
+      } else {
+        console.log(`✅ Todos los itemIds son únicos en el frontend`);
+      }
+
       const payload = {
         evaluation: {
           instrumentKey: "centro-sim-qa",
@@ -190,19 +242,12 @@ export default function HomePage() {
             userName: user?.profile?.full_name || null,
           },
         },
-        answers: allItems.map((i) => ({
-          itemId: i.id, // ID único del item
-          itemCode: i.code, // Código para referencia
-          domainCode: i.domainCode,
-          score: answers[i.id].notApplicable ? null : answers[i.id].value,
-          notApplicable: answers[i.id].notApplicable,
-          evidence: answers[i.id].evidence || undefined,
-          observations: answers[i.id].observations || undefined,
-        })),
+        answers: answersToSend,
       };
 
-      console.log("📦 Payload to send:", payload);
-      console.log(`📊 Enviando ${payload.answers.length} respuestas únicas`);
+      console.log(`📊 Enviando ${payload.answers.length} respuestas desde el frontend`);
+      console.log("📦 Primera respuesta:", payload.answers[0]);
+      console.log("📦 Última respuesta:", payload.answers[payload.answers.length - 1]);
 
       console.log("🌐 Sending request to /api/submit");
       const res = await fetch("/api/submit", {
@@ -219,15 +264,22 @@ export default function HomePage() {
         throw new Error(responseText);
       }
 
-      alert("✅ ¡Respuestas enviadas correctamente!");
+      // Marcar como enviado exitosamente
+      setSubmitted(true);
       
-      // Opcionalmente, limpiar el formulario o redirigir
-      // window.location.href = "/";
+      const responseData = JSON.parse(responseText);
+      const answersCount = responseData.answersCount || "?";
+      
+      alert(`✅ ¡Respuestas enviadas correctamente!\n\nTotal guardado: ${answersCount} respuestas\n\nLa página se recargará automáticamente.`);
+      
+      // Recargar después de 2 segundos
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
     } catch (err) {
       console.error("❌ Error in submit:", err);
       alert(`Error al enviar las respuestas: ${err}`);
-    } finally {
-      setSubmitting(false);
+      setSubmitting(false); // Solo resetear si hay error
     }
   }
 
@@ -345,16 +397,17 @@ export default function HomePage() {
                 <Button
                   type="button"
                   onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
-                  disabled={!pageComplete}
+                  disabled={!pageComplete || submitting}
                 >
                   Siguiente
                 </Button>
               ) : (
                 <Button 
                   type="submit" 
-                  disabled={!pageComplete || submitting}
+                  disabled={!pageComplete || submitting || submitted}
+                  className={submitting || submitted ? "opacity-50 cursor-not-allowed" : ""}
                 >
-                  {submitting ? "Enviando..." : "Enviar"}
+                  {submitted ? "✅ Enviado" : (submitting ? "⏳ Enviando..." : "Enviar")}
                 </Button>
               )}
             </div>

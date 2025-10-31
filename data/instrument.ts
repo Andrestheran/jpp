@@ -119,20 +119,41 @@ export async function loadDomains(): Promise<UIDomain[]> {
       };
     });
 
-    // Contar total de items
+    // Contar total de items y verificar duplicados
     const totalItems = domains.reduce((total, domain) => {
       return total + domain.subsections.reduce((subTotal, subsection) => {
         return subTotal + subsection.items.length;
       }, 0);
     }, 0);
 
+    // Verificar IDs únicos
+    const allItemIds = domains.flatMap(d => 
+      d.subsections.flatMap(s => s.items.map(i => i.id))
+    );
+    const uniqueItemIds = new Set(allItemIds);
+    
     console.log("✅ Domains loaded successfully:", domains.length);
     console.log(`📊 Total items across all domains: ${totalItems}`);
+    console.log(`🔑 Total unique item IDs: ${uniqueItemIds.size}`);
+    
+    if (allItemIds.length !== uniqueItemIds.size) {
+      console.error(`🚨 HAY IDs DUPLICADOS: ${allItemIds.length} items pero solo ${uniqueItemIds.size} IDs únicos`);
+      
+      // Encontrar duplicados
+      const idCounts = new Map<string, number>();
+      allItemIds.forEach(id => {
+        idCounts.set(id, (idCounts.get(id) || 0) + 1);
+      });
+      const duplicateIds = Array.from(idCounts.entries()).filter(([_, count]) => count > 1);
+      console.error(`  Duplicados encontrados:`, duplicateIds.map(([id, count]) => `${id} (${count}x)`));
+    }
     
     // Log detallado por dominio
     domains.forEach((domain, idx) => {
       const domainItemCount = domain.subsections.reduce((sum, sub) => sum + sub.items.length, 0);
-      console.log(`  Dominio ${idx + 1} (${domain.code}): ${domainItemCount} items`);
+      const domainItemIds = domain.subsections.flatMap(s => s.items.map(i => i.id));
+      const uniqueDomainIds = new Set(domainItemIds);
+      console.log(`  Dominio ${idx + 1} (${domain.code}): ${domainItemCount} items, ${uniqueDomainIds.size} IDs únicos`);
     });
 
     cachedDomains = domains;
