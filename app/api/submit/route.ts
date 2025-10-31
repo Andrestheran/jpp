@@ -6,12 +6,15 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const AnswerSchema = z.object({
-  itemCode: z.string(), // "1.1", "1.2", ...
+  itemId: z.string().optional(), // ID único del item (preferido)
+  itemCode: z.string().optional(), // Código del item (fallback para compatibilidad)
   domainCode: z.string(), // "1", "2", ...
   score: z.number().int().min(0).max(2).nullable().optional(),
   notApplicable: z.boolean().optional(),
   evidence: z.string().optional(),
   observations: z.string().optional(),
+}).refine((data) => data.itemId || data.itemCode, {
+  message: "Se requiere itemId o itemCode",
 });
 
 const BodySchema = z.object({
@@ -63,45 +66,96 @@ export async function POST(req: Request) {
     );
   }
 
-  // 3) Mapear itemCode -> item_id
-  const codes = Array.from(new Set(body.answers.map((a) => a.itemCode)));
-  const { data: items, error: itemsErr } = await sb
-    .from("items")
-    .select("id, code")
-    .in("code", codes);
+  // 3) Obtener item_ids
+  // Preferir itemId si está disponible, sino buscar por código
+  const itemIds: string[] = [];
+  const codesToLookup: string[] = [];
+  
+  body.answers.forEach((a) => {
+    if (a.itemId) {
+      itemIds.push(a.itemId);
+    } else if (a.itemCode) {
+      codesToLookup.push(a.itemCode);
+    }
+  });
 
-  if (itemsErr) {
-    return NextResponse.json(
-      { error: "Error obteniendo ítems", details: itemsErr.message },
-      { status: 500 }
-    );
+  // Si hay códigos que buscar, obtener sus IDs
+  let codeToId = new Map<string, string>();
+  if (codesToLookup.length > 0) {
+    const codes = Array.from(new Set(codesToLookup));
+    const { data: items, error: itemsErr } = await sb
+      .from("items")
+      .select("id, code")
+      .in("code", codes);
+
+    if (itemsErr) {
+      return NextResponse.json(
+        { error: "Error obteniendo ítems", details: itemsErr.message },
+        { status: 500 }
+      );
+    }
+    
+    // ADVERTENCIA: Si hay códigos duplicados, esto puede causar problemas
+    codeToId = new Map(items.map((i) => [i.code, i.id]));
+    
+    const missing = codes.filter((c) => !codeToId.get(c));
+    if (missing.length) {
+      return NextResponse.json(
+        { error: "Ítems inexistentes en DB", missing },
+        { status: 400 }
+      );
+    }
   }
-  const codeToId = new Map(items.map((i) => [i.code, i.id]));
-  const missing = codes.filter((c) => !codeToId.get(c));
-  if (missing.length) {
+
+  // 4) Insert masivo de respuestas
+  const rows = body.answers
+    .map((a) => {
+      const item_id = a.itemId || codeToId.get(a.itemCode!);
+      
+      if (!item_id) {
+        console.error(`No se encontró item_id para:`, a);
+        return null;
+      }
+
+      return {
+        evaluation_id: evalRow.id,
+        item_id: item_id,
+        score: a.notApplicable ? null : a.score ?? null,
+        not_applicable: !!a.notApplicable,
+        evidence: a.evidence ?? null,
+        observations: a.observations ?? null,
+      };
+    })
+    .filter((row): row is NonNullable<typeof row> => row !== null);
+  
+  // Deduplicar por item_id para evitar duplicados
+  const uniqueRows = Array.from(
+    new Map(rows.map(row => [row.item_id, row])).values()
+  );
+  
+  if (uniqueRows.length < rows.length) {
+    console.warn(`⚠️ Se eliminaron ${rows.length - uniqueRows.length} respuestas duplicadas`);
+  }
+
+  if (uniqueRows.length === 0) {
     return NextResponse.json(
-      { error: "Ítems inexistentes en DB", missing },
+      { error: "No hay respuestas válidas para guardar" },
       { status: 400 }
     );
   }
 
-  // 4) Insert masivo de respuestas
-  const rows = body.answers.map((a) => ({
-    evaluation_id: evalRow.id,
-    item_id: codeToId.get(a.itemCode)!,
-    score: a.notApplicable ? null : a.score ?? null,
-    not_applicable: !!a.notApplicable,
-    evidence: a.evidence ?? null,
-    observations: a.observations ?? null,
-  }));
-
-  const { error: insErr } = await sb.from("answers").insert(rows);
+  const { error: insErr } = await sb.from("answers").insert(uniqueRows);
   if (insErr) {
+    console.error("Error insertando respuestas:", insErr);
     return NextResponse.json(
       { error: "Error guardando respuestas", details: insErr.message },
       { status: 500 }
     );
   }
 
-  return NextResponse.json({ ok: true, evaluationId: evalRow.id });
+  return NextResponse.json({ 
+    ok: true, 
+    evaluationId: evalRow.id,
+    answersCount: uniqueRows.length 
+  });
 }

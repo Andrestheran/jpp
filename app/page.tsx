@@ -191,7 +191,8 @@ export default function HomePage() {
           },
         },
         answers: allItems.map((i) => ({
-          itemCode: i.code,
+          itemId: i.id, // ID único del item
+          itemCode: i.code, // Código para referencia
           domainCode: i.domainCode,
           score: answers[i.id].notApplicable ? null : answers[i.id].value,
           notApplicable: answers[i.id].notApplicable,
